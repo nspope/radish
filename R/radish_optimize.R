@@ -62,14 +62,26 @@ radish_optimize <- function(f, g, s, S, theta = rep(0, ncol(s$x)), leverage = TR
 
   if (fit$boundary)
     warning("Optimum for subproblem is on boundary (e.g. no spatial genetic structure): cannot optimize theta. Try different starting values.")
+  else
+  {
+    ztable <- matrix(0, length(theta), 4)
+    colnames(ztable) <- c("Est", "StdErr", "Z", "pval")
+    rownames(ztable) <- s$covariates
+    ztable[,"Est"]   <- theta
+    ztable[,"StdErr"] <- diag(solve(fit$hessian))
+    ztable[,"Z"]      <- ztable[,"Est"]/ztable[,"StdErr"]
+    ztable[,"pval"]   <- pmin(2*(1 - pnorm(abs(ztable[,"Z"]))), 1)
+  }
 
   list(fcall          = .fcall, #DEBUG
        fit            = fit,
        theta          = theta,
+       ztable         = ztable,
+       AIC            = 2*fit$objective + 2*length(theta) + 2*length(fit$phi),
        phi            = fit$phi,
-       loglikelihood  = fit$objective,
-       gradient       = fit$gradient,
-       hessian        = fit$hessian,
+       loglikelihood  = -fit$objective,
+       gradient       = -fit$gradient,
+       hessian        = -fit$hessian,
        leverage_S     = if(!leverage) NULL else leverage_S,
        leverage_X     = if(!leverage) NULL else leverage_X,
        num_leverage_S = if(!validate) NULL else num_leverage_S,

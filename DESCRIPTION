@@ -1,4 +1,4 @@
-Package: radish2
+Package: radish
 Type: Package
 Title: Fast gradient-based optimization of resistance surfaces
 Version: 0.0.1

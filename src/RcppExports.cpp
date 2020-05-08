@@ -8,7 +8,7 @@ using namespace Rcpp;
 
 // backpropagate_laplacian_to_conductance
 arma::vec backpropagate_laplacian_to_conductance(const arma::mat& tGl, const arma::mat& tGr, const arma::umat& tadj);
-RcppExport SEXP _radish2_backpropagate_laplacian_to_conductance(SEXP tGlSEXP, SEXP tGrSEXP, SEXP tadjSEXP) {
+RcppExport SEXP _radish_backpropagate_laplacian_to_conductance(SEXP tGlSEXP, SEXP tGrSEXP, SEXP tadjSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -21,7 +21,7 @@ END_RCPP
 }
 // backpropagate_conductance_to_laplacian
 arma::sp_mat backpropagate_conductance_to_laplacian(const arma::vec& dgrad__ddl_dC, const arma::umat& tadj);
-RcppExport SEXP _radish2_backpropagate_conductance_to_laplacian(SEXP dgrad__ddl_dCSEXP, SEXP tadjSEXP) {
+RcppExport SEXP _radish_backpropagate_conductance_to_laplacian(SEXP dgrad__ddl_dCSEXP, SEXP tadjSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -33,12 +33,12 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_radish2_backpropagate_laplacian_to_conductance", (DL_FUNC) &_radish2_backpropagate_laplacian_to_conductance, 3},
-    {"_radish2_backpropagate_conductance_to_laplacian", (DL_FUNC) &_radish2_backpropagate_conductance_to_laplacian, 2},
+    {"_radish_backpropagate_laplacian_to_conductance", (DL_FUNC) &_radish_backpropagate_laplacian_to_conductance, 3},
+    {"_radish_backpropagate_conductance_to_laplacian", (DL_FUNC) &_radish_backpropagate_conductance_to_laplacian, 2},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_radish2(DllInfo *dll) {
+RcppExport void R_init_radish(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

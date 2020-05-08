@@ -2,10 +2,10 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 backpropagate_laplacian_to_conductance <- function(tGl, tGr, tadj) {
-    .Call(`_radish2_backpropagate_laplacian_to_conductance`, tGl, tGr, tadj)
+    .Call(`_radish_backpropagate_laplacian_to_conductance`, tGl, tGr, tadj)
 }
 
 backpropagate_conductance_to_laplacian <- function(dgrad__ddl_dC, tadj) {
-    .Call(`_radish2_backpropagate_conductance_to_laplacian`, dgrad__ddl_dC, tadj)
+    .Call(`_radish_backpropagate_conductance_to_laplacian`, dgrad__ddl_dC, tadj)
 }
 
