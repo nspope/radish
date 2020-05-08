@@ -1,0 +1,1317 @@
+# Numerical validation of the gradients/hessians/leverages derived in
+#
+#   Pope NS. Submitted. Fast gradient-based optimization of resistance surfaces.
+#
+# Much more efficient implementations of the different objectives/gradients/etc are used for the radish R package.
+# The emphasis here is on clarity. I try to use symbols that mirror the notation used in the paper. 
+# Requires "reshape2" and "numDeriv" for numerical validation.
+
+source("R/hagerzhang.R")
+
+# PRIORITY: C++
+
+# PRIORITY: interface with "radish_conductance_surface"
+
+# PRIORITY: MLPE and Wishart likelihoods
+
+# TODO: there seem to be many parts of parameter space (e.g. extremes) that result in singular Qn. This is bad if bisection or secant picks a point in an interval, where endpoints are ok but interior is bad. In this case I think I need some smart way to handle things; like revert to backtracking or something
+
+# TODO: in paper, talk about asymptotic behavior of profile likelihood following Murphy & van der Vaart 2000 On profile likelihood JASA 95: 449-465
+
+# TODO: is sensitive to scaling of x -- should rescale internally and backscale hessian/etc
+
+# TODO: I think there might be rounding issues for the gradient, causing it to never fall below a certain small number? Very puzzling.
+
+# TODO: radish_main returns negative loglik/gradient
+
+cpp1fn1 <- '
+  #include <RcppArmadillo.h>
+
+  // [[Rcpp::depends(RcppArmadillo)]]
+
+  // [[Rcpp::export]]
+  arma::vec backpropagate_gradient_to_conductance (const arma::mat& tGl, const arma::mat& tGr, const arma::umat& tadj)
+  {
+    if (tadj.n_rows != 2)
+      Rcpp::stop("[backpropagate_gradient] tadj.n_rows != 2");
+
+    if (tGl.n_rows != tGr.n_rows || tGl.n_cols != tGr.n_cols)
+      Rcpp::stop("[backpropagate_gradient] dim(tGl) != dim(tGr)");
+
+    const unsigned N = tGl.n_cols;
+
+    arma::vec djj (N);
+    for (unsigned vertex = 0; vertex < N; ++vertex)
+      djj.at(vertex) = -arma::dot(tGl.col(vertex), tGr.col(vertex));
+
+    arma::vec dl_dC (N+1, arma::fill::zeros);
+    unsigned i, j;
+    double dij;
+
+    for (unsigned edge = 0; edge < tadj.n_cols; ++edge)
+    {
+      j = tadj.at(0, edge);
+      i = tadj.at(1, edge);
+      if (i <= j) 
+        continue;
+      else if (i > N)
+        Rcpp::stop("[backpropagate_gradient] vertex out of bounds");
+      else if (i == N)
+      {
+        dl_dC.at(i) += djj.at(j);
+        dl_dC.at(j) += djj.at(j);
+      }
+      else
+      {
+        dij = djj.at(i) + djj.at(j) + 
+          arma::dot(tGl.col(i), tGr.col(j)) +
+          arma::dot(tGl.col(j), tGr.col(i));
+        dl_dC.at(i) += dij;
+        dl_dC.at(j) += dij;
+      }
+    }
+
+    return dl_dC;
+  }
+'
+
+cppfn2 <- '
+  #include <RcppArmadillo.h>
+
+  // [[Rcpp::depends(RcppArmadillo)]]
+
+  // [[Rcpp::export]]
+  arma::sp_mat backpropagate_conductance_to_laplacian (const arma::vec& dgrad__ddl_dC, const arma::umat& tadj)
+  {
+    if (tadj.n_rows != 2)
+      Rcpp::stop("[backpropagate_conductance] tadj.n_rows != 2");
+
+    const unsigned N = dgrad__ddl_dC.n_elem - 1;
+
+    unsigned i, j;
+    double dij;
+
+    arma::vec diagonal (N, arma::fill::zeros),
+              offdiagonal (tadj.n_cols, arma::fill::zeros);
+
+    for (unsigned edge = 0; edge < tadj.n_cols; ++edge)
+    {
+      j = tadj.at(0, edge);
+      i = tadj.at(1, edge);
+
+      if (i <= j)
+        continue;
+      else if (i > N)
+        Rcpp::stop("[backpropagate_conductance] vertex out of bounds");
+
+      dij = dgrad__ddl_dC.at(i) + dgrad__ddl_dC.at(j);
+      diagonal.at(j) += dij;
+      if (i != N)
+      {
+        offdiagonal.at(edge) = -dij;
+        diagonal.at(i) += dij;
+      }
+    }
+
+    arma::sp_mat dgrad__ddl_dQn (tadj, offdiagonal, N, N);
+    dgrad__ddl_dQn.diag() = diagonal;
+
+    return arma::trimatu(dgrad__ddl_dQn);
+  }
+'
+
+radish_main <- function(f, g, S, x = cbind(-5:5/10, (-5:5/10)^2), demes = as.integer(seq(1, nrow(x), length.out=nrow(S))), adj = Laplacian1d(nrow(x)), theta = rep(0, ncol(x)), validate = FALSE, control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-6, ftol = 1e-6))
+{
+  problem <- BoxConstrainedNewton(theta, 
+                           function(par, gradient = TRUE, hessian = TRUE) 
+                               radish_algorithm_sparse(f = f, g = g, S = S, theta = c(par), x = x, demes = demes, adj = adj),
+                           control = control)
+  theta <- problem$par
+
+  # calculate leverage for genetic distance and spatial covariates
+  ihess      <- MASS::ginv(problem$fit$hessian) 
+  leverage_S <- -matrix(problem$fit$partial_S, length(S), ncol(x)) %*% ihess
+  leverage_S[upper.tri(S),] <- 0
+  leverage_S <- array(leverage_S, dim = c(nrow(S), ncol(S), length(theta)))
+  leverage_X <- array(NA, dim = dim(problem$fit$partial_X))
+  for (k in 1:ncol(x))
+    leverage_X[,,k] <- -problem$fit$partial_X[,,k] %*% ihess
+
+  if (validate)
+  {
+    silence <- function(control) { control$verbose = FALSE; control }
+
+    num_leverage_S <- 
+      array(t(numDeriv::jacobian(function(S) 
+                                 radish_main(g = g, 
+                                             S = S, 
+                                             x = x, 
+                                             demes = demes, 
+                                             theta = problem$par, 
+                                             control = silence(control))$theta, 
+                                 S, method = "simple")), 
+            dim = dim(leverage_S))
+
+    num_leverage_X <- array(NA, dim = dim(leverage_X))
+    for (k in 1:ncol(x))
+      num_leverage_X[,,k] <- 
+        t(numDeriv::jacobian(function(z) {
+                               x[,k] <- z 
+                               radish_main(g = g, 
+                                           S = S, 
+                                           x = x, 
+                                           demes = demes, 
+                                           theta = problem$par, 
+                                           control = silence(control))$theta }, 
+                             x[,k], method = "simple"))
+  }
+
+  if (problem$fit$boundary)
+    warning("Optimum for subproblem is on boundary (e.g. no spatial genetic structure): cannot optimize theta. Try different starting values.")
+
+  list(fit            = problem$fit,
+       theta          = problem$par,
+       phi            = problem$fit$phi,
+       loglikelihood  = problem$value,
+       gradient       = problem$gradient,
+       hessian        = problem$hessian,
+       leverage_S     = leverage_S,
+       leverage_X     = leverage_X,
+       num_leverage_S = if(validate) num_leverage_S else NULL,
+       num_leverage_X = if(validate) num_leverage_X else NULL)
+}
+
+radish_grid <- function(g, S, theta_grid, x = cbind(-5:5/10, (-5:5/10)^2), demes = as.integer(seq(1, nrow(x), length.out=nrow(S))))
+{
+  if (!(class(theta_grid) == "matrix" && ncol(theta_grid) != ncol(x)))
+    stop("invalid inputs")
+
+  ll  <- rep(NA, nrow(theta_grid))
+  for (i in 1:nrow(theta_grid))
+    try({
+      obj     <- radish_algorithm(g, S = S, theta = c(theta_grid[i,]), x = x, demes = demes)$objective
+      ll[i]   <- obj$objective
+      phi$phi <- c(obj$phi)
+    })
+  df <- data.frame(theta_grid, ll = ll)
+  df
+}
+
+Laplacian1d <- function(N) {
+  Q <- matrix(0, N, N)
+  for(i in 1:(N-1)) 
+    Q[i,i+1] <- Q[i+1,i] <- 1
+  ii <- which(Q == 1, arr.ind=TRUE)
+  ii[ii[,1] < ii[,2],]
+}
+
+loglinear_conductance <- function(x, theta)
+{
+  conductance        <- as.vector(exp(x %*% theta))
+
+  stopifnot(all(conductance > 0))
+
+  # first- and second-order derivatives
+  df__dx             <- function(k)    conductance * theta[k]
+  df__dtheta         <- function(k)    conductance * x[,k]
+  d2f__dtheta_dtheta <- function(k, l) conductance * x[,k] * x[,l]
+  d2f__dtheta_dx     <- function(k, l) conductance * ((k==l) + x[,k] * theta[l])
+
+  list(conductance        = conductance,
+       df__dx             = df__dx,
+       df__dtheta         = df__dtheta,
+       d2f__dtheta_dtheta = d2f__dtheta_dtheta, 
+       d2f__dtheta_dx     = d2f__dtheta_dx)
+}
+class(loglinear_conductance) <- c("radish_conductance_model")
+
+radish_algorithm_sparse <- function(f, g, S, theta = rep(0, ncol(x)), x = cbind(-5:5/10, (-5:5/10)^2), demes = as.integer(seq(1, nrow(x), length.out=nrow(S))), adj = Laplacian1d(nrow(x)), objective = TRUE, gradient = TRUE, hessian = TRUE, validate = FALSE)
+{
+  stopifnot(    class(f) == "radish_conductance_model")
+  stopifnot(    class(g) == "radish_measurement_model")
+  stopifnot(    class(S) == "matrix"                  )
+  stopifnot(class(theta) == "numeric"                 )
+  stopifnot(    class(x) == "matrix"                  )
+  stopifnot(class(demes) == "integer"                 )
+  stopifnot(  class(adj) == "matrix"                  )
+
+  stopifnot(length(theta) == ncol(x))
+  stopifnot(length(demes) == nrow(S))
+  stopifnot(      nrow(S) == ncol(S))
+  stopifnot(   min(demes) >= 1      )
+  stopifnot(   max(demes) <= nrow(x))
+  stopifnot(    ncol(adj) == 2      )
+  stopifnot(     min(adj) >= 1      )
+  stopifnot(     max(adj) <= nrow(x))
+
+  library(numDeriv)
+  symm <- function(X) (X + t(X))/2
+
+  # conductance
+  C <- f(x, theta)
+
+  # Form the Laplacian. "adj" is assumed to contain at a minimum
+  # the upper triangular part of the Laplacian (e.g. all edges [i,j]
+  # where i < j). Duplicated edges are ignored.
+  N    <- nrow(x)
+  Q    <- Matrix::sparseMatrix(i = adj[,1], j = adj[,2], dims = c(N, N),
+                               x = -C$conductance[adj[,1]] - C$conductance[adj[,2]], 
+                               use.last.ij = TRUE)
+  Q    <- Matrix::forceSymmetric(Q)
+  tadj <- rbind(Q@i, rep(1:Q@Dim[2] - 1, diff(Q@p))) #upper-triangular, 0-based
+
+  # Eq. ??? in radish paper
+  Qd   <- Matrix::Diagonal(N, x = -rowSums(Q))
+  In   <- Matrix::Diagonal(N)[-N,]
+  Qn   <- Matrix::forceSymmetric(In %*% (Q + Qd) %*% t(In))
+  ones <- matrix(1, N, 1)
+  v    <- sqrt(ones / N)
+  Z    <- Matrix::Diagonal(N)[,demes]
+  Zn   <- (In - In %*% v %*% t(v)) %*% Z #this could get big
+  LQn  <- Matrix::Cholesky(Qn, LDL = TRUE)
+  G    <- as.matrix(Matrix::solve(LQn, Zn)) #cnvt to dense
+  E    <- as.matrix(t(Zn) %*% G) #cnvt to dense
+
+  if (objective || gradient || hessian)
+  {
+    # measurement model
+    subproblem <- radish_subproblem(g = g, E = E, S = S, 
+                                    control = NewtonRaphsonControl(verbose = FALSE, 
+                                                                   ftol = 1e-10, 
+                                                                   ctol = 1e-10))
+    phi        <- subproblem$phi
+    loglik     <- subproblem$loglikelihood
+
+    # gradient calculation
+    if (gradient || hessian)
+    {
+      grad     <- rep(0, length(theta))
+      dl_dE    <- subproblem$gradient 
+      dl_dQnG  <- G %*% dl_dE
+      dl_dC    <- backpropagate_gradient_to_conductance(t(dl_dQnG), t(G), tadj)
+      for(k in 1:length(theta))
+        grad[k] <- c(dl_dC) %*% C$df__dtheta(k)
+
+      # hessian and mixed partial derivative calculations
+      if (hessian)
+      {
+        hess      <- matrix(0, length(theta), length(theta))
+        partial_X <- array(0, c(nrow(x), length(theta), length(theta)))
+        partial_S <- array(0, c(nrow(S), ncol(S), length(theta)))
+        for (k in 1:length(theta))
+        {
+          dgrad__ddl_dC   <- C$df__dtheta(k) 
+          dgrad__ddl_dQn  <- Matrix::forceSymmetric(backpropagate_conductance_to_laplacian(dgrad__ddl_dC, tadj))
+          dgrad__ddl_dQnG <- dgrad__ddl_dQn %*% G
+          dgrad__ddl_dE   <- -as.matrix(t(G) %*% dgrad__ddl_dQnG) #cnvt to dense
+          partial_S[,,k]  <- subproblem$jacobian_S(dgrad__ddl_dE)
+          dgrad__dE       <- subproblem$jacobian_E(dgrad__ddl_dE)
+          dgrad__dG       <- Zn %*% dgrad__dE - 2 * dgrad__ddl_dQnG %*% dl_dE
+          dgrad__dQnG     <- as.matrix(Matrix::solve(LQn, dgrad__dG)) #cnvt to dense
+          dgrad__dC       <- backpropagate_gradient_to_conductance(t(dgrad__dQnG), t(G), tadj)
+          for(l in 1:length(theta))
+          {
+            hess[k,l]       <- c(dgrad__dC) %*% C$df__dtheta(l) + c(dl_dC) %*% C$d2f__dtheta_dtheta(k, l)
+            partial_X[,k,l] <- c(dgrad__dC) * C$df__dx(l) + c(dl_dC) * C$d2f__dtheta_dx(k, l)
+          }
+        }
+      }
+    }
+  }
+
+  # numerical validation
+  if (validate)
+  {
+    num_gradient <- numDeriv::grad(function(theta) 
+                                   radish_algorithm_sparse(g = g, 
+                                                           S = S, 
+                                                           theta = theta, 
+                                                           x = x, 
+                                                           demes = demes, 
+                                                           adj = adj)$objective, 
+                                   theta, method = "Richardson")
+
+    num_hessian  <- numDeriv::hessian(function(theta) 
+                                      radish_algorithm_sparse(g = g, 
+                                                              S = S, 
+                                                              theta = theta, 
+                                                              x = x, 
+                                                              demes = demes, 
+                                                              adj = adj)$objective, 
+                                      theta, method = "Richardson")
+
+    num_partial_X  <- array(0, c(nrow(x), length(theta), length(theta)))
+    for (l in 1:length(theta))
+      num_partial_X[,,l] <- t(numDeriv::jacobian(function(z) {
+                                                 x[,l] <- z
+                                                 radish_algorithm_sparse(g = g, 
+                                                                         S = S, 
+                                                                         theta = theta, 
+                                                                         x = x, 
+                                                                         demes = demes, 
+                                                                         adj = adj)$gradient },
+                                                  x[,l], method="simple"))
+
+    num_partial_S <- array(t(numDeriv::jacobian(function(S) 
+                                                radish_algorithm_sparse(g = g, 
+                                                                        S = S, 
+                                                                        theta = theta, 
+                                                                        x = x, 
+                                                                        demes = demes, 
+                                                                        adj = adj)$gradient, 
+                                                S, method = "simple")), 
+                           c(nrow(S), ncol(S), length(theta)))
+  }
+
+  list (covariance    = E,
+        objective     = if(!objective) NULL else loglik,
+        phi           = if(!objective) NULL else phi,
+        boundary      = if(!objective) NULL else subproblem$boundary, # the solution is on the boundary (e.g. no genetic structure) so all derivatives wrt theta are 0
+        fitted        = if(!objective) NULL else subproblem$fit$fitted,
+        gradient      = if(!gradient)  NULL else grad * (1 - subproblem$boundary), # wrt theta
+        hessian       = if(!hessian)   NULL else hess * (1 - subproblem$boundary), # wrt theta
+        partial_X     = if(!hessian)   NULL else partial_X * (1 - subproblem$boundary), # partial_X[i,l,k] is \frac{\partial^2 L(theta,x)}{\partial theta_l \partial x_{ik}}
+        partial_S     = if(!hessian)   NULL else partial_S * (1 - subproblem$boundary), # partial_S[i,j,k] is \frac{\partial^2 L(theta,x)}{\partial theta_k \partial S_{ij}}
+        num_gradient  = if(!validate)  NULL else num_gradient,
+        num_hessian   = if(!validate)  NULL else num_hessian,
+        num_partial_X = if(!validate)  NULL else num_partial_X,
+        num_partial_S = if(!validate)  NULL else num_partial_S)
+}
+
+radish_algorithm <- function(g, S, theta = rep(0, ncol(x)), x = cbind(-5:5/10, (-5:5/10)^2), demes = as.integer(seq(1, nrow(x), length.out=nrow(S))), validate = FALSE)
+{
+  if (length(theta) != ncol(x) || 
+      length(demes) != nrow(S) || 
+      nrow(S) != ncol(S)       || 
+      min(demes) < 1           || 
+      max(demes) > nrow(x)     )
+    stop("Invalid inputs")
+
+  library(numDeriv)
+
+  symm <- function(X) (X + t(X))/2
+
+  # submodels
+  f             <- function(x, theta)       c(exp(x %*% theta))                 #conductance model, C = f(theta, x)
+  df_dx         <- function(x, theta, k)    c(exp(x %*% theta)) * theta[k]      #df/dx_k
+  df_dtheta     <- function(x, theta, k)    c(exp(x %*% theta)) * x[,k]         #df/dtheta_k
+  d2f_dtheta2   <- function(x, theta, k, l) c(exp(x %*% theta)) * x[,k] * x[,l] #d(df/dtheta_l)/dtheta_k
+  d2f_dtheta_dx <- function(x, theta, k, l)                                     #d(df/dx_l)/dx_k
+    c(exp(x %*% theta)) * ((k==l) + x[,k] * theta[l])
+
+  # Laplacian for a 1d lattice with Neumann boundary conditions
+  N <- nrow(x)
+  C <- f(x, theta)
+  Q <- matrix(0, N, N)
+  for(i in 1:(N-1)) 
+    Q[i,i+1] <- Q[i+1,i] <- -C[i] - C[i+1]
+  diag(Q) <- -rowSums(Q)
+
+  # Eq. ??? in radish paper
+  ones <- matrix(1, nrow(Q), 1)
+  In   <- diag(nrow(Q))[-nrow(Q),]
+  Qn   <- In %*% Q %*% t(In)
+  v    <- sqrt(ones / N)
+  Z    <- diag(nrow(Q))[,demes]
+  Zn   <- (In - In %*% v %*% t(v)) %*% Z
+  #LQn  <- t(chol(Qn))
+  #G    <- solve(t(LQn), solve(LQn, Zn))
+  G    <- qr.solve(Qn, Zn)
+  E    <- t(Zn) %*% G
+
+  # measurement model
+  subproblem <- radish_subproblem(g = g, E = E, S = S, control = NewtonRaphsonControl(verbose = FALSE, ftol = 1e-10, ctol = 1e-10))
+  phi        <- subproblem$phi
+  loglik     <- subproblem$loglikelihood
+
+  # gradient calculation
+  gradient <- rep(0, length(theta))
+  dotE     <- subproblem$gradient 
+  dotQn    <- -G %*% dotE %*% t(G) 
+  Nei      <- apply(Q, 1, function(x) which(x < 0))
+  dotC     <- rep(0, N)
+  for(i in 1:(N-1))
+  {
+    dotC[i] <- length(Nei[[i]]) * dotQn[i,i]
+    Nei_N   <- Nei[[i]][Nei[[i]] != N]
+    for(j in Nei_N)
+      dotC[i] <- dotC[i] + dotQn[j,j] - dotQn[i,j] - dotQn[j,i]
+  }
+  dotC[N]  <- sum(sapply(Nei[[N]], function(j) dotQn[j,j]))
+  for(k in 1:length(theta))
+    gradient[k] <- dotC %*% df_dtheta(x, theta, k)
+
+  # hessian and mixed partial derivative calculations
+  hessian   <- matrix(0, length(theta), length(theta))
+  partial_X <- array(0, c(nrow(x), length(theta), length(theta)))
+  partial_S <- array(0, c(nrow(S), ncol(S), length(theta)))
+  for (k in 1:length(theta))
+  {
+    dotdotC  <- df_dtheta(x, theta, k) #dot dot goose
+    dotdotQn <- matrix(0, N-1, N-1)
+    for(j in Nei[[N]])
+      dotdotQn[j,j] <- dotdotQn[j,j] + dotdotC[N]
+    for(i in (N-1):1)
+    {
+      Nei_N <- Nei[[i]][Nei[[i]] != N]
+      n     <- length(Nei[[i]])
+      for (j in Nei_N)
+      {
+        dotdotQn[j,j] = dotdotQn[j,j] + dotdotC[i]
+        dotdotQn[i,j] = dotdotQn[i,j] - dotdotC[i]
+        dotdotQn[j,i] = dotdotQn[j,i] - dotdotC[i]
+      }
+      dotdotQn[i,i] = dotdotQn[i,i] + n * dotdotC[i]
+    }
+    partial_S[,,k] <- subproblem$jacobian_S(-t(G) %*% dotdotQn %*% G) # d(dL/dE)/dS
+    dotdotE        <- subproblem$jacobian_E(-t(G) %*% dotdotQn %*% G)
+    dotdotG     <- -t(dotdotQn) %*% G %*% dotE - dotdotQn %*% G %*% dotE + Zn %*% dotdotE #where are the first two terms coming from?
+    #dotdotdotQn <- -solve(t(LQn), solve(LQn, dotdotG)) %*% t(G) #this is getting silly
+    dotdotdotQn <- -qr.solve(Qn, dotdotG) %*% t(G) #this is getting silly
+    dotdotdotC  <- rep(0, N)
+    for(i in 1:(N-1))
+    {
+      dotdotdotC[i] <- length(Nei[[i]]) * dotdotdotQn[i,i]
+      Nei_N         <- Nei[[i]][Nei[[i]] != N]
+      for(j in Nei_N)
+        dotdotdotC[i] <- dotdotdotC[i] + dotdotdotQn[j,j] - dotdotdotQn[i,j] - dotdotdotQn[j,i]
+    }
+    dotdotdotC[N] <- sum(sapply(Nei[[N]], function(j) dotdotdotQn[j,j]))
+    for(l in 1:length(theta))
+    {
+      hessian[k,l]     <- dotdotdotC %*% df_dtheta(x, theta, l) + dotC %*% d2f_dtheta2(x, theta, k, l)
+      partial_X[,k,l]  <- dotdotdotC * df_dx(x, theta, l) + dotC * d2f_dtheta_dx(x, theta, k, l)
+    }
+  }
+
+  if (validate)
+  {
+    num_gradient   <- numDeriv::grad(function(theta) radish_algorithm(g = g, S = S, theta = theta, x = x, demes = demes)$objective, theta, method = "Richardson")
+    num_hessian    <- symm(numDeriv::hessian(function(theta) radish_algorithm(g = g, S = S, theta = theta, x = x, demes = demes)$objective, theta, method = "Richardson"))
+    num_partial_X  <- array(0, c(nrow(x), length(theta), length(theta)))
+    for (l in 1:length(theta))
+      num_partial_X[,,l] <- t(numDeriv::jacobian(function(z) {x[,l] <- z; radish_algorithm(g = g, S = S, theta = theta, x = x, demes = demes)$gradient}, x[,l], method="simple"))
+    num_partial_S <- array(t(numDeriv::jacobian(function(S) radish_algorithm(g = g, S = S, theta = theta, x = x, demes = demes)$gradient, S, method = "simple")), c(nrow(S), ncol(S), length(theta)))
+  }
+
+  list (objective     = loglik,
+        theta         = theta,
+        phi           = phi,
+        boundary      = subproblem$boundary, # the solution is on the boundary (e.g. no genetic structure) so all derivatives wrt theta are 0
+        fitted        = subproblem$fit$fitted,
+        covariance    = subproblem$fit$covariance,
+        gradient      = gradient  * (1 - subproblem$boundary), # wrt theta
+        hessian       = hessian   * (1 - subproblem$boundary), # wrt theta
+        partial_X     = partial_X * (1 - subproblem$boundary), # partial_X[i,l,k] is \frac{\partial^2 L(theta,x)}{\partial theta_l \partial x_{ik}}
+        partial_S     = partial_S * (1 - subproblem$boundary), # partial_S[i,j,k] is \frac{\partial^2 L(theta,x)}{\partial theta_k \partial S_{ij}}
+        num_gradient  = if(validate) num_gradient  else NULL,
+        num_hessian   = if(validate) num_hessian   else NULL,
+        num_partial_X = if(validate) num_partial_X else NULL,
+        num_partial_S = if(validate) num_partial_S else NULL)
+}
+
+goo <- function() {list(radish_algorithm_sparse(loglinear_conductance, theta=c(0.1,0.1), positive_regression, S), radish_algorithm(positive_regression, theta=c(0.1,0.1), S))}
+
+radish_subproblem <- function(g, E, S, phi = g(E = E, S = S), validate = FALSE, control = NewtonRaphsonControl(ctol = 1e-10, ftol = 1e-10, verbose = TRUE))
+{
+  # use Newton-Raphson to profile out nuisance parameters
+  subproblem  <- BoxConstrainedNewton(phi$phi, 
+                               function(par, gradient=TRUE, hessian=TRUE) 
+                                 g(E = E, S = S, phi = c(par)),
+                               lower = phi$lower,
+                               upper = phi$upper,
+                               control = control)
+  gradient_E  <- subproblem$fit$gradient_E
+
+  # for hessian, need to get d(dg/dE)/dE via adjoint method,
+  #   dg/dE = \partial (dg/dE)/\partial E + \partial (dg/dE)/\partial \hat{phi} \times \partial \hat{\phi}/\partial E
+  # where
+  #   dg/dphi = 0 ==> d(dg/dphi)/dE = 0 ==> 
+  #       \partial (dg/dphi)/\partial E + \partial (dg/dphi)/\partial phi \times dphi/dE = 0 ==>
+  #       dphi/dE = -[\partial (dg/dphi)/\partial phi]^-1 \partial (dg/dphi)/\partial E
+  partial_E   <- subproblem$fit$partial_E
+  invhess     <- MASS::ginv(subproblem$hessian)
+  jacobian_E  <- function(dotdotE)
+  { 
+    #why is this nonzero when on boundary?
+    dphi_dE   <- -matrix(c(dotdotE) %*% partial_E %*% invhess %*% t(partial_E), nrow(dotdotE), ncol(dotdotE))
+    return (subproblem$fit$jacobian_E(dotdotE) + dphi_dE)
+  }
+
+  # likewise, to get the leverage dtheta/dy, 
+  #    dl/dtheta = 0 ==> d(dl/dtheta)/dy = 0 ==>
+  #       \partial (dl/dtheta)/\partial y + \partial (dl/dtheta)/\partial theta \times dtheta/dy = 0 ==>
+  #       dtheta/dy = -[\partial (dl/dtheta)/\partial theta]^{-1} \partial (dl/dtheta)/partial y
+  # so, need the change in the gradient with y
+  partial_S   <- subproblem$fit$partial_S
+  jacobian_S  <- function(dotdotE)
+  { 
+    #why is this nonzero when on boundary?
+    dphi_dS                     <- matrix(0, nrow(S), ncol(S))
+    dphi_dS[lower.tri(dphi_dS)] <- -c(dotdotE) %*% partial_E %*% invhess %*% partial_S
+    dphi_dS                     <- dphi_dS + t(dphi_dS)
+    return (subproblem$fit$jacobian_S(dotdotE) + dphi_dS)
+  }
+
+  if (validate)
+  {
+    silence <- function(control) { control$verbose = FALSE; control }
+    num_jacobian_E <- function(X) 
+      matrix(c(X) %*% numDeriv::jacobian(function(x) radish_subproblem(g = g, E = x, S = S, phi = phi, control = silence(control))$gradient, E), nrow(E), ncol(E))
+    num_jacobian_S <- function(X) 
+      matrix(c(X) %*% numDeriv::jacobian(function(x) radish_subproblem(g = g, E = E, S = x, phi = phi, control = silence(control))$gradient, S), nrow(S), ncol(S))
+  }
+
+  list(fit            = subproblem$fit,
+       loglikelihood  = subproblem$value,
+       phi            = subproblem$par,
+       boundary       = subproblem$boundary,
+       gradient       = gradient_E,
+       jacobian_E     = jacobian_E,
+       jacobian_S     = jacobian_S,
+       num_jacobian_E = if(validate) num_jacobian_E else NULL,
+       num_jacobian_S = if(validate) num_jacobian_S else NULL)
+}
+
+positive_regression <- function(E, S, phi, validate = FALSE)
+{
+  if (missing(phi)) #return starting values and boundaries for optimization  
+  {
+    symm <- function(X) (X + t(X))/2
+    ones <- matrix(1, nrow(E), 1)
+    Ed   <- diag(E)
+    R    <- Ed %*% t(ones) + ones %*% t(Ed) - 2 * symm(E)
+    Rl   <- R[lower.tri(R)]
+    Sl   <- S[lower.tri(S)]
+    fit  <- nlme::gls(Sl ~ Rl, method = "ML")
+    phi  <- c("alpha" = coef(fit)[1], "beta" = log(max(coef(fit)[2],1e-10)), "tau" = -2 * log(sigma(fit)))
+    return(list(phi = phi, lower = rep(-Inf, length(phi)), upper = rep(Inf, length(phi))))
+  }
+  else if (!(class(E) == "matrix" & class(S) == "matrix" & all(dim(E) == dim(S)) &
+             class(phi) == "numeric" & length(phi) == 3))
+    stop ("invalid inputs")
+  names(phi) <- c("alpha", "beta", "tau")
+
+  library(numDeriv)
+
+  symm <- function(X) (X + t(X))/2
+
+  ones <- matrix(1, nrow(E), 1)
+  Ed   <- diag(E)
+  R    <- Ed %*% t(ones) + ones %*% t(Ed) - 2 * symm(E)
+
+  Rl <- R[lower.tri(R)]
+  Sl <- S[lower.tri(S)]
+
+  alpha <- phi["alpha"]
+  tau   <- phi["tau"]
+  beta  <- phi["beta"]
+
+  unos   <- matrix(1, length(Sl), 1)
+  e      <- Sl - alpha * unos - exp(beta) * Rl
+  loglik <- -0.5 * exp(tau) * t(e) %*% e + 0.5 * nrow(e) * tau
+
+  # gradients, hessians, mixed partial derivatives
+  dR <- matrix(0, nrow(R), ncol(R))
+  dR[lower.tri(dR)] <- 2 * exp(tau + beta) * as.vector(e)
+  dR <- symm(dR)
+  dE <- diag(nrow(R)) * (dR %*% ones %*% t(ones)) - dR
+
+  dPhi    <- matrix(0, length(phi), 1)
+  ddPhi   <- matrix(0, length(phi), length(phi))
+  ddEdPhi <- matrix(0, length(Rl),  length(phi))
+  ddPhidS <- matrix(0, length(phi), length(Sl))
+  rownames(dPhi) <- colnames(ddPhi) <- rownames(ddPhi) <- colnames(ddEdPhi) <- rownames(ddPhidS) <- c("alpha", "beta", "tau")
+
+  dPhi["alpha",] <- t(unos) %*% e * exp(tau)
+  dPhi["beta",]  <- t(Rl) %*% e * exp(beta + tau)
+  dPhi["tau",]   <- -0.5 * exp(tau) * t(e) %*% e + 0.5 * length(e)
+
+  ddPhi["alpha", "alpha"] <- -t(unos) %*% unos * exp(tau)
+  ddPhi["alpha",  "beta"] <- -exp(beta + tau) * t(unos) %*% Rl
+  ddPhi["alpha",   "tau"] <- exp(tau) * t(unos) %*% e
+  ddPhi[ "beta",  "beta"] <- exp(beta + tau) * Rl %*% (e - exp(beta) * Rl)
+  ddPhi[ "beta",   "tau"] <- exp(beta + tau) * t(Rl) %*% e
+  ddPhi[  "tau",   "tau"] <- -0.5 * exp(tau) * t(e) %*% e
+  ddPhi                   <- ddPhi + t(ddPhi)
+  diag(ddPhi)             <- diag(ddPhi)/2
+
+  ddEdPhi[, "alpha"] <- -2 * exp(tau + beta) * unos
+  ddEdPhi[,  "beta"] <- 2 * exp(tau + beta) * (e - exp(beta) * Rl)
+  ddEdPhi[,   "tau"] <- 2 * exp(tau + beta) * e
+  ddEdPhi            <- apply(ddEdPhi, 2, function(x) { X <- matrix(0,nrow(E),ncol(E)); X[lower.tri(X)] <- x; X <- symm(X); diag(nrow(E)) * (X %*% ones %*% t(ones)) - X })
+
+  ddPhidS["alpha",] <- exp(tau)
+  ddPhidS["beta",]  <- exp(beta + tau) * Rl
+  ddPhidS["tau",]   <- -exp(tau) * e
+
+  jacobian_E <- function(dE)
+  {
+    ddEdE <- diag(dE) %*% t(ones) + ones %*% t(diag(dE)) - 2 * symm(dE)
+    ddEdE <- -exp(2 * beta + tau) * ddEdE
+    ddEdE <- diag(nrow(dE)) * (ddEdE %*% ones %*% t(ones)) - ddEdE
+    -ddEdE
+  }
+
+  jacobian_S <- function(dE)
+  {
+    ddEdE <- diag(dE) %*% t(ones) + ones %*% t(diag(dE)) - 2 * symm(dE)
+    ddEdE <- -exp(beta + tau) * ddEdE
+    ddEdE <- diag(nrow(dE)) * (ddEdE %*% ones %*% t(ones)) - ddEdE
+    #ddEdE[upper.tri(ddEdE, diag=TRUE)] <- 0
+    diag(ddEdE) <- 0
+    -ddEdE
+  }
+
+  if (validate)
+  {
+    num_gradient    <- numDeriv::grad(function(x) positive_regression(E = E, phi = x, S = S, FALSE)$objective, phi)
+    num_hessian     <- numDeriv::hessian(function(x) positive_regression(E = E, phi = x, S = S, FALSE)$objective, phi)
+    num_gradient_E  <- symm(matrix(numDeriv::grad(function(x) positive_regression(E = x, phi = phi, S = S, FALSE)$objective, E), nrow(E), ncol(E)))
+    num_partial_E   <- numDeriv::jacobian(function(x) positive_regression(E = E, phi = x, S = S, FALSE)$gradient_E, phi)
+    num_partial_S   <- numDeriv::jacobian(function(x) positive_regression(E = E, phi = phi, S = x, FALSE)$gradient, S)[,lower.tri(S)]
+    num_jacobian_E  <- function(X) matrix(c(X) %*% numDeriv::jacobian(function(x) positive_regression(E = x, phi = phi, S = S, FALSE)$gradient_E, E), nrow(X), ncol(X))
+    num_jacobian_S  <- function(X) matrix(c(X) %*% numDeriv::jacobian(function(x) positive_regression(E = E, phi = phi, S = x, FALSE)$gradient_E, S), nrow(X), ncol(X))
+  }
+
+  distance <- matrix(0, nrow(S), ncol(S))
+  distance[lower.tri(distance)] <- Rl
+  distance <- distance + t(distance)
+
+  fitted <- alpha + exp(beta) * distance
+
+  list(objective        = -c(loglik), 
+       fitted           = fitted,
+       covariance       = E,
+       gradient         = -dPhi,
+       hessian          = -ddPhi,
+       gradient_E       = -dE, 
+       partial_E        = -ddEdPhi,   # partial_E[i,k] is d(dl/dE_i)/dPhi_k where i is linearized matrix index
+       partial_S        = -ddPhidS,   # partial_S[i,k] is d(dl/dPhi_i)/dS_k where k is linearized matrix index
+       jacobian_E       = jacobian_E, # function mapping vectorized dg/dE to d(dg/dE)/dE
+       jacobian_S       = jacobian_S, # function mapping vectorized dg/dE to d(dg/dE)/dS
+       num_gradient     = if(validate) num_gradient else NULL,
+       num_hessian      = if(validate) num_hessian else NULL,
+       num_gradient_E   = if(validate) num_gradient_E else NULL,
+       num_partial_E    = if(validate) num_partial_E else NULL,
+       num_partial_S    = if(validate) num_partial_S else NULL, 
+       num_jacobian_E   = if(validate) num_jacobian_E else NULL,
+       num_jacobian_S   = if(validate) num_jacobian_S else NULL)
+}
+class(positive_regression) <- "radish_measurement_model"
+
+nonnegative_leastsquares <- function(E, S, phi, validate = FALSE)
+{
+  if (missing(phi)) #return starting values and boundaries for optimization
+  {
+    symm <- function(X) (X + t(X))/2
+    ones <- matrix(1, nrow(E), 1)
+    Ed   <- diag(E)
+    R    <- Ed %*% t(ones) + ones %*% t(Ed) - 2 * symm(E)
+    Rl   <- R[lower.tri(R)]
+    Sl   <- S[lower.tri(S)]
+    fit  <- nlme::gls(Sl ~ Rl, method = "ML")
+    if (coef(fit)[2] > 0) 
+      phi <- c("alpha" = coef(fit)[1], "beta" = coef(fit)[2], "tau" = -2 * log(sigma(fit)))
+    else
+    {
+      fit <- nlme::gls(Sl ~ 1, method = "ML")
+      phi <- c("alpha" = coef(fit)[1], "beta" = 0, "tau" = -2 * log(sigma(fit)))
+    }
+    return(list(phi=phi, lower=c(-Inf, 0, -Inf), upper=c(Inf, Inf, Inf)))
+  }
+  else if (!(class(E)    == "matrix"    & 
+             class(S)    == "matrix"    & 
+             all(dim(E)  == dim(S))     &
+             class(phi)  == "numeric"   & 
+             length(phi) == 3           ))
+    stop ("invalid inputs")
+
+  names(phi) <- c("alpha", "beta", "tau")
+
+  library(numDeriv)
+
+  symm <- function(X) (X + t(X))/2
+
+  ones <- matrix(1, nrow(E), 1)
+  Ed   <- diag(E)
+  R    <- Ed %*% t(ones) + ones %*% t(Ed) - 2 * symm(E)
+
+  Rl <- R[lower.tri(R)]
+  Sl <- S[lower.tri(S)]
+
+  alpha <- phi["alpha"]
+  tau   <- exp(phi["tau"])
+  beta  <- phi["beta"]
+
+  unos   <- matrix(1, length(Sl), 1)
+  e      <- Sl - alpha * unos - beta * Rl
+  loglik <- -0.5 * tau * t(e) %*% e + 0.5 * nrow(e) * log(tau)
+
+  # gradients, hessians, mixed partial derivatives
+  dR <- matrix(0, nrow(R), ncol(R))
+  dR[lower.tri(dR)] <- 2 * beta * tau * as.vector(e)
+  dR <- symm(dR)
+  dE <- diag(nrow(R)) * (dR %*% ones %*% t(ones)) - dR
+
+  dPhi    <- matrix(0, length(phi), 1)
+  ddPhi   <- matrix(0, length(phi), length(phi))
+  ddEdPhi <- matrix(0, length(Rl),  length(phi))
+  ddPhidS <- matrix(0, length(phi), length(Sl))
+  rownames(dPhi) <- colnames(ddPhi) <- 
+    rownames(ddPhi) <- colnames(ddEdPhi) <- 
+      rownames(ddPhidS) <- names(phi)
+
+  dPhi["alpha",] <- t(unos) %*% e * tau
+  dPhi["beta",]  <- t(Rl) %*% e * tau
+  dPhi["tau",]   <- -0.5 * tau * t(e) %*% e + 0.5 * length(e)
+
+  ddPhi["alpha", "alpha"] <- -t(unos) %*% unos * tau
+  ddPhi["alpha",  "beta"] <- -tau * t(unos) %*% Rl
+  ddPhi["alpha",   "tau"] <- tau * t(unos) %*% e
+  ddPhi[ "beta",  "beta"] <- -t(Rl) %*% Rl * tau
+  ddPhi[ "beta",   "tau"] <- tau * t(Rl) %*% e
+  ddPhi[  "tau",   "tau"] <- -0.5 * tau * t(e) %*% e
+  ddPhi                   <- ddPhi + t(ddPhi)
+  diag(ddPhi)             <- diag(ddPhi)/2
+
+  ddEdPhi[, "alpha"] <- -2 * beta * tau * unos
+  ddEdPhi[,  "beta"] <- 2 * tau * (e - beta * Rl)
+  ddEdPhi[,   "tau"] <- 2 * beta * tau * e
+  ddEdPhi            <- apply(ddEdPhi, 2, function(x) { X <- matrix(0,nrow(E),ncol(E)); X[lower.tri(X)] <- x; X <- symm(X); diag(nrow(E)) * (X %*% ones %*% t(ones)) - X })
+
+  # dS = -tau * e
+  ddPhidS["alpha",] <- unos * tau
+  ddPhidS["beta",]  <- Rl * tau
+  ddPhidS["tau",]   <- -tau * e
+
+  jacobian_E <- function(dE)
+  {
+    ddEdE <- diag(dE) %*% t(ones) + ones %*% t(diag(dE)) - 2 * symm(dE)
+    ddEdE <- -beta^2 * tau * ddEdE
+    ddEdE <- diag(nrow(dE)) * (ddEdE %*% ones %*% t(ones)) - ddEdE
+    -ddEdE
+  }
+
+  jacobian_S <- function(dE)
+  {
+    ddEdE <- diag(dE) %*% t(ones) + ones %*% t(diag(dE)) - 2 * symm(dE)
+    ddEdE <- -beta * tau * ddEdE
+    ddEdE <- diag(nrow(dE)) * (ddEdE %*% ones %*% t(ones)) - ddEdE
+    diag(ddEdE) <- 0
+    -ddEdE
+  }
+
+  if (validate)
+  {
+    num_gradient    <- numDeriv::grad(function(x) nonnegative_regression(E = E, phi = x, S = S)$objective, phi)
+    num_hessian     <- numDeriv::hessian(function(x) nonnegative_regression(E = E, phi = x, S = S)$objective, phi)
+    num_gradient_E  <- symm(matrix(numDeriv::grad(function(x) nonnegative_regression(E = x, phi = phi, S = S)$objective, E), nrow(E), ncol(E)))
+    num_partial_E   <- numDeriv::jacobian(function(x) nonnegative_regression(E = E, phi = x, S = S)$gradient_E, phi)
+    num_partial_S   <- numDeriv::jacobian(function(x) nonnegative_regression(E = E, phi = phi, S = x)$gradient, S)[,lower.tri(S)]
+    num_jacobian_E  <- function(X) matrix(c(X) %*% numDeriv::jacobian(function(x) nonnegative_regression(E = x, phi = phi, S = S)$gradient_E, E), nrow(X), ncol(X))
+    num_jacobian_S  <- function(X) matrix(c(X) %*% numDeriv::jacobian(function(x) nonnegative_regression(E = E, phi = phi, S = x)$gradient_E, S), nrow(X), ncol(X))
+  }
+
+  distance <- matrix(0, nrow(S), ncol(S))
+  distance[lower.tri(distance)] <- Rl
+  distance <- distance + t(distance)
+
+  fitted <- alpha + beta * distance
+
+  list(objective        = -c(loglik), 
+       fitted           = fitted,
+       covariance       = E,
+       gradient         = -dPhi,
+       hessian          = -ddPhi,
+       gradient_E       = -dE, 
+       partial_E        = -ddEdPhi,   # partial_E[i,k] is d(dl/dE_i)/dPhi_k where i is linearized matrix index
+       partial_S        = -ddPhidS,   # partial_S[i,k] is d(dl/dPhi_i)/dS_k where k is linearized matrix index
+       jacobian_E       = jacobian_E, # function mapping vectorized dg/dE to d(dg/dE)/dE
+       jacobian_S       = jacobian_S, # function mapping vectorized dg/dE to d(dg/dE)/dS
+       num_gradient     = if(validate) num_gradient else NULL,
+       num_hessian      = if(validate) num_hessian else NULL,
+       num_gradient_E   = if(validate) num_gradient_E else NULL,
+       num_partial_E    = if(validate) num_partial_E else NULL,
+       num_partial_S    = if(validate) num_partial_S else NULL,
+       num_jacobian_E   = if(validate) num_jacobian_E else NULL,
+       num_jacobian_S   = if(validate) num_jacobian_S else NULL)
+}
+class(nonnegative_leastsquares) <- "radish_measurement_model"
+
+nonnegative_mlpe <- function(E, S, phi, validate = FALSE)
+{
+  symm <- function(X) (X + t(X))/2
+
+  if (missing(phi)) #return starting values and boundaries for optimization
+  {
+    ones <- matrix(1, nrow(E), 1)
+    Ed   <- diag(E)
+    R    <- Ed %*% t(ones) + ones %*% t(Ed) - 2 * symm(E)
+    Rl   <- R[lower.tri(R)]
+    Sl   <- S[lower.tri(S)]
+    Ind  <- which(lower.tri(R), arr.ind = TRUE)
+
+    fit  <- nlme::gls(Sl ~ Rl, method = "ML", correlation = corMLPE(form = ~Ind1 + Ind2), 
+                      data = data.frame(Sl, Rl, Ind1 = Ind[,1], Ind2 = Ind[,2]))
+    if (coef(fit)[2] > 0) 
+    {
+      rho <- fit$modelStruct$corStruct[[1]] #already unconstrained
+      phi <- c("alpha" = coef(fit)[1], "beta" = coef(fit)[2], "tau" = -2 * log(sigma(fit)), 
+               "rho" = rho)
+    }
+    else
+    {
+      fit  <- nlme::gls(Sl ~ 1, method = "ML", correlation = corMLPE(form = ~Ind1 + Ind2), 
+                        data = data.frame(Sl, Ind1 = Ind[,1], Ind2 = Ind[,2]))
+      rho <- fit$modelStruct$corStruct[[1]] #already unconstrained
+      phi <- c("alpha" = coef(fit)[1], "beta" = 0, "tau" = -2 * log(sigma(fit)), 
+               "rho" = rho)
+    }
+    return(list(phi=phi, lower=c(-Inf, 0, -Inf, -Inf), upper=c(Inf, Inf, Inf, Inf)))
+  }
+  else if (!(class(E)    == "matrix"    & 
+             class(S)    == "matrix"    & 
+             all(dim(E)  == dim(S))     &
+             class(phi)  == "numeric"   & 
+             length(phi) == 4           ))
+    stop ("invalid inputs")
+
+  names(phi) <- c("alpha", "beta", "tau", "rho")
+
+  library(numDeriv)
+
+  symm <- function(X) (X + t(X))/2
+
+  ones <- matrix(1, nrow(E), 1)
+  Ed   <- diag(E)
+  R    <- Ed %*% t(ones) + ones %*% t(Ed) - 2 * symm(E)
+
+  Rl  <- R[lower.tri(R)]
+  Sl  <- S[lower.tri(S)]
+  Ind <- which(lower.tri(R), arr.ind = TRUE)
+
+  alpha <- phi["alpha"]
+  beta  <- phi["beta"]
+  tau   <- exp(phi["tau"])
+  rho   <- 0.5*plogis(phi["rho"])
+
+  unos   <- matrix(1, length(Sl), 1)
+  U      <- Matrix::sparseMatrix(i = rep(1:length(Sl), 2), j = c(Ind), x = c(unos))
+  eigUtU <- eigen(as.matrix(t(U) %*% U)) #this could be precomputed
+  D      <- eigUtU$values
+  P      <- eigUtU$vectors
+  Dr     <- D/(1-2*rho) + 1/rho
+
+  SigmaInv <- function(x)
+  {
+    Ax <- 1/(1-2*rho) * x
+    x <- t(U) %*% Ax
+    x <- t(P) %*% x
+    x <- x / Dr
+    x <- P %*% x
+    x <- Ax - 1/(1-2*rho) * U %*% x
+    as.matrix(x)
+  }
+
+  SigmaLogDet <- sum(log(Dr)) + length(D) * log(rho) + length(Sl) * log(1 - 2*rho)
+
+  # products against inverse correlation matrix
+  e       <- Sl - alpha * unos - beta * Rl
+  Si_unos <- SigmaInv(unos)
+  Si_Rl   <- SigmaInv(Rl)
+  Si_Sl   <- SigmaInv(Sl)
+  Si_e    <- SigmaInv(e)
+  loglik  <- -0.5 * tau * t(e) %*% Si_e + 0.5 * nrow(e) * log(tau) - 0.5 * SigmaLogDet 
+
+  # gradients, hessians, mixed partial derivatives
+  dR <- matrix(0, nrow(R), ncol(R))
+  dR[lower.tri(dR)] <- 2 * beta * tau * as.vector(Si_e)
+  dR <- symm(dR)
+  dE <- diag(nrow(R)) * (dR %*% ones %*% t(ones)) - dR
+
+  dPhi    <- matrix(0, length(phi), 1)
+  ddPhi   <- matrix(0, length(phi), length(phi))
+  ddEdPhi <- matrix(0, length(Rl),  length(phi))
+  ddPhidS <- matrix(0, length(phi), length(Sl))
+  rownames(dPhi) <- colnames(ddPhi) <- 
+    rownames(ddPhi) <- colnames(ddEdPhi) <- 
+      rownames(ddPhidS) <- names(phi)
+
+  drho_Si_e  <- t(U) %*% Si_e
+  drho_Si_e  <- as.matrix(2*Si_e - U %*% drho_Si_e)
+  drho_trans <- rho * (1 - 2*rho)
+
+  dPhi["alpha",] <- t(unos) %*% Si_e * tau
+  dPhi["beta",]  <- t(Rl) %*% Si_e * tau
+  dPhi["tau",]   <- -0.5 * tau * t(e) %*% Si_e + 0.5 * length(e)
+  dPhi["rho",]   <- -0.5 * tau * t(Si_e) %*% drho_Si_e - 
+    0.5 * sum((2*D/(1-2*rho)^2 - 1/rho^2)/Dr) - 
+    0.5 * length(D)/rho + length(Sl)/(1-2*rho)
+  dPhi["rho",]   <- dPhi["rho",] * drho_trans
+
+  ddPhi["alpha", "alpha"] <- -tau * t(unos) %*% Si_unos
+  ddPhi["alpha",  "beta"] <- -tau * t(unos) %*% Si_Rl
+  ddPhi["alpha",   "tau"] <- tau * t(unos) %*% Si_e
+  ddPhi["alpha",   "rho"] <- tau * t(Si_unos) %*% drho_Si_e * drho_trans
+  ddPhi[ "beta",  "beta"] <- -tau * t(Rl) %*% Si_Rl
+  ddPhi[ "beta",   "tau"] <- tau * t(Rl) %*% Si_e
+  ddPhi[ "beta",   "rho"] <- tau * t(Si_Rl) %*% drho_Si_e * drho_trans
+  ddPhi[  "tau",   "tau"] <- -0.5 * tau * t(e) %*% Si_e
+  ddPhi[  "tau",   "rho"] <- -0.5 * tau * t(Si_e) %*% drho_Si_e * drho_trans
+  ddPhi[  "rho",   "rho"] <- -tau * t(drho_Si_e) %*% SigmaInv(drho_Si_e) +
+     -0.5 * sum((8*D/(1-2*rho)^3 + 2/rho^3)/Dr) + 0.5 * sum((2*D/(1-2*rho)^2 - 1/rho^2)^2/Dr^2) + 
+     0.5 * length(D)/rho^2 + 2 * length(Sl)/(1-2*rho)^2
+  ddPhi["rho","rho"]      <- ddPhi["rho","rho"] * drho_trans^2 + dPhi["rho",] * (1 - 4*rho)
+  ddPhi                   <- ddPhi + t(ddPhi)
+  diag(ddPhi)             <- diag(ddPhi)/2
+
+  ddEdPhi[, "alpha"] <- -2 * beta * tau * Si_unos
+  ddEdPhi[,  "beta"] <- 2 * tau * (Si_e - beta * Si_Rl)
+  ddEdPhi[,   "tau"] <- 2 * beta * tau * Si_e
+  ddEdPhi[,   "rho"] <- 2 * beta * tau * SigmaInv(drho_Si_e) * drho_trans
+  ddEdPhi            <- apply(ddEdPhi, 2, function(x) { X <- matrix(0,nrow(E),ncol(E)); X[lower.tri(X)] <- x; X <- symm(X); diag(nrow(E)) * (X %*% ones %*% t(ones)) - X })
+
+  ddPhidS["alpha",] <- tau * Si_unos
+  ddPhidS["beta",]  <- tau * Si_Rl
+  ddPhidS["tau",]   <- -tau * Si_e
+  ddPhidS["rho",]   <- -tau * SigmaInv(drho_Si_e) * drho_trans
+
+  jacobian_E <- function(dE)
+  {
+    ddEdE <- diag(dE) %*% t(ones) + ones %*% t(diag(dE)) - 2 * symm(dE)
+    ddEdE[lower.tri(ddEdE)] <- SigmaInv(ddEdE[lower.tri(ddEdE)])
+    ddEdE[upper.tri(ddEdE)] <- 0
+    ddEdE <- ddEdE + t(ddEdE)
+    ddEdE <- -beta^2 * tau * ddEdE
+    ddEdE <- diag(nrow(dE)) * (ddEdE %*% ones %*% t(ones)) - ddEdE
+    -ddEdE
+  }
+
+  jacobian_S <- function(dE)
+  {
+    ddEdE <- diag(dE) %*% t(ones) + ones %*% t(diag(dE)) - 2 * symm(dE)
+    ddEdE[lower.tri(ddEdE)] <- SigmaInv(ddEdE[lower.tri(ddEdE)])
+    ddEdE[upper.tri(ddEdE)] <- 0
+    ddEdE <- ddEdE + t(ddEdE)
+    ddEdE <- -beta * tau * ddEdE
+    ddEdE <- diag(nrow(dE)) * (ddEdE %*% ones %*% t(ones)) - ddEdE
+    diag(ddEdE) <- 0
+    -ddEdE
+  }
+
+  if (validate)
+  {
+    num_gradient    <- numDeriv::grad(function(x) nonnegative_mlpe(E = E, phi = x, S = S)$objective, phi)
+    num_hessian     <- numDeriv::hessian(function(x) nonnegative_mlpe(E = E, phi = x, S = S)$objective, phi)
+    num_gradient_E  <- symm(matrix(numDeriv::grad(function(x) nonnegative_mlpe(E = x, phi = phi, S = S)$objective, E), nrow(E), ncol(E)))
+    num_partial_E   <- numDeriv::jacobian(function(x) nonnegative_mlpe(E = E, phi = x, S = S)$gradient_E, phi)
+    num_partial_S   <- numDeriv::jacobian(function(x) nonnegative_mlpe(E = E, phi = phi, S = x)$gradient, S)[,lower.tri(S)]
+    num_jacobian_E  <- function(X) matrix(c(X) %*% numDeriv::jacobian(function(x) nonnegative_mlpe(E = x, phi = phi, S = S)$gradient_E, E), nrow(X), ncol(X))
+    num_jacobian_S  <- function(X) matrix(c(X) %*% numDeriv::jacobian(function(x) nonnegative_mlpe(E = E, phi = phi, S = x)$gradient_E, S), nrow(X), ncol(X))
+  }
+
+  distance <- matrix(0, nrow(S), ncol(S))
+  distance[lower.tri(distance)] <- Rl
+  distance <- distance + t(distance)
+
+  fitted <- alpha + beta * distance
+
+  list(objective        = -c(loglik), 
+       fitted           = fitted,
+       covariance       = E,
+       gradient         = -dPhi,
+       hessian          = -ddPhi,
+       gradient_E       = -dE, 
+       partial_E        = -ddEdPhi,   # partial_E[i,k] is d(dl/dE_i)/dPhi_k where i is linearized matrix index
+       partial_S        = -ddPhidS,   # partial_S[i,k] is d(dl/dPhi_i)/dS_k where k is linearized matrix index
+       jacobian_E       = jacobian_E, # function mapping vectorized dg/dE to d(dg/dE)/dE
+       jacobian_S       = jacobian_S, # function mapping vectorized dg/dE to d(dg/dE)/dS
+       num_gradient     = if(validate) num_gradient else NULL,
+       num_hessian      = if(validate) num_hessian else NULL,
+       num_gradient_E   = if(validate) num_gradient_E else NULL,
+       num_partial_E    = if(validate) num_partial_E else NULL,
+       num_partial_S    = if(validate) num_partial_S else NULL,
+       num_jacobian_E   = if(validate) num_jacobian_E else NULL,
+       num_jacobian_S   = if(validate) num_jacobian_S else NULL)
+}
+class(nonnegative_mlpe) <- "radish_measurement_model"
+
+#stopped
+
+naive_regression <- function(E, S, validate=TRUE)
+{
+  if (!(class(E) == "matrix" & class(S) == "matrix" & all(dim(E) == dim(S))))
+    stop ("invalid inputs")
+
+  library(numDeriv)
+
+  symm <- function(X) (X + t(X))/2
+
+  ones <- matrix(1, nrow(E), 1)
+  Ed   <- diag(E)
+  R    <- Ed %*% t(ones) + ones %*% t(Ed) - 2 * symm(E)
+
+  Rl <- R[lower.tri(R)]
+  Sl <- S[lower.tri(S)]
+
+  ##equivalent to:
+  #fit <- nlme::gls(y ~ x, data=data.frame(y=Sl, x=Rl), method="ML")
+
+  #constrained case
+  #  alpha, e^beta, tau
+  #grad wrt to alpha, 
+  #  1' resid tau 
+  #grad wrt to beta
+  #  e^beta r' resid tau
+  #grad wrt to tau
+  #  -0.5 resid' resid + 1/(2 tau)
+  #grad wrt to r
+  # 2 tau e^beta (y - alpha 1 - r e^beta)
+  #now differentiate dr with respect to nuisance pars
+  #  dr/dalpha = -2 tau e^beta
+  #  dr/dbeta  = 2 tau e^beta (resid - e^beta r)
+  #  dr/dtau   = 2 e^beta (y - alpha 1 - r e^beta)
+  #also need hessian
+  #  alpha  [ -1' 1 tau, -e^beta r' 1 tau, 1' resid ]
+  #  beta   [ ...      , e^2beta r' resid tau - e^3beta r' r tau, e^beta r' resid ]
+  #  tau    [ ...      , ... , -1/tau^2 ]
+  
+
+  I1     <- diag(2)[,-1]
+  X      <- cbind(1, Rl)
+  beta   <- solve(t(X) %*% X) %*% t(X) %*% Sl
+  e      <- Sl - X %*% beta
+  sigma  <- c(t(e) %*% e / nrow(e)) # MLE, not Bessel-corrected
+  loglik <- -0.5 * 1/sigma * t(e) %*% e - 
+             0.5 * nrow(e) * log(sigma) - 
+             0.5 * nrow(e) * log(2 * pi)
+
+  dotR <- matrix(0, nrow(R), ncol(R))
+  dotR[lower.tri(dotR)] <- 2 * beta[2]/sigma * c(e)
+  dotR <- symm(dotR)
+  dotE <- diag(nrow(R)) * (dotR %*% ones %*% t(ones)) - dotR
+
+  jacobian <- function(dE){
+  to_dotR_from_dE  <- symm(2 * diag(dE) %*% t(ones) - 2 * dE)[lower.tri(dE)]
+  to_e_from_dotR <- beta[2]/sigma * to_dotR_from_dE
+  to_beta2_from_dotR <- 1/sigma * t(e) %*% to_dotR_from_dE
+  to_sigma_from_dotR <- -c(beta[2]/sigma^2 * t(e) %*% to_dotR_from_dE)
+  to_e_from_sigma <- to_sigma_from_dotR * 2 * e/nrow(e)
+  to_beta2_from_e <- -t(X[,2]) %*% (to_e_from_dotR + to_e_from_sigma)
+  to_beta1_from_e <- -t(X[,1]) %*% (to_e_from_dotR + to_e_from_sigma)
+  to_beta_from_e_and_dotR <- c(to_beta1_from_e, to_beta2_from_e + to_beta2_from_dotR)
+  to_X_from_e <- -(to_e_from_dotR + to_e_from_sigma) %*% t(beta)
+  to_X_from_beta <- -X %*% beta %*% t(to_beta_from_e_and_dotR) %*% solve(t(X)%*%X) - X %*% solve(t(X)%*%X) %*% to_beta_from_e_and_dotR %*% t(beta) + Sl %*% t(to_beta_from_e_and_dotR) %*% solve(t(X)%*%X)
+  to_R_from_X <- matrix(0, nrow(R), ncol(R))
+  to_R_from_X[lower.tri(to_R_from_X)] <- (to_X_from_beta + to_X_from_e)[,2]
+  to_R_from_X <- symm(to_R_from_X)
+  to_E_from_R <- 2 * diag(nrow(R)) * (to_R_from_X %*% ones %*% t(ones)) - 2 * to_R_from_X
+  return(to_E_from_R)
+  }
+
+  jacobian <- function(dE){
+
+  dR <- symm(2 * diag(dE) %*% t(ones) - 2 * dE)[lower.tri(dE)]
+
+  Vcov <- solve(t(X) %*% X)
+  Xinv <- Vcov %*% t(X)
+  Hat  <- X %*% Xinv
+  dr   <- 2 * beta[2]/sigma * e
+  I    <- diag(nrow(X))
+  I1   <- diag(2)[,-1, drop=FALSE]
+  to_X <- 
+    beta[2]^2/sigma * (Hat - I) %*% dR +
+    -0.5 * dr %*% t(dR) %*% t(Xinv) %*% I1 +
+    -0.5 * t(Xinv) %*% I1 %*% t(dr) %*% dR +
+    dr %*% t(dr) %*% dR %*% (sigma/4 * beta[2]^-2 * t(I1) %*% Vcov %*% I1 + 1/(2*nrow(E)))
+    #0.25 * sigma/beta[2]^2 * dr %*% t(dr) %*% dR %*% t(I1) %*% Vcov %*% I1 +
+    #0.5/nrow(e) * dr %*% t(dr) %*% dR 
+  to_R_from_X <- matrix(0, nrow(R), ncol(R))
+  to_R_from_X[lower.tri(to_R_from_X)] <- to_X#[,2]
+  to_R_from_X <- symm(to_R_from_X)
+  to_E_from_R <- 2 * diag(nrow(R)) * (to_R_from_X %*% ones %*% t(ones)) - 2 * to_R_from_X
+  return(to_E_from_R)
+  }
+
+  if (validate)
+    num_gradient <- symm(matrix(numDeriv::grad(function(x) naive_regression(x, S, FALSE)$objective, E), nrow(E), ncol(E)))
+
+  list(objective    = loglik, 
+       gradient     = dotE, 
+       jacobian     = jacobian,
+       num_gradient = if(validate) num_gradient else NULL)
+}
+
+mlpe_regression <- function(E, S, rho, validate=TRUE)
+{
+  if (!(class(E) == "matrix" & class(S) == "matrix" & class(rho) == "numeric" & 
+        all(dim(E) == dim(S)) & length(rho) == 1 & rho > 0 & rho < 0.5))
+    stop ("invalid inputs")
+
+  library(numDeriv)
+  library(reshape2)
+
+  symm <- function(X) (X + t(X))/2
+
+  ones <- matrix(1, nrow(E), 1)
+  Ed   <- diag(E)
+  R    <- Ed %*% t(ones) + ones %*% t(Ed) - 2 * symm(E)
+
+  Rl <- R[lower.tri(R)]
+  Sl <- as.matrix(melt(S))
+  Ui <- Sl[Sl[,1] < Sl[,2],1:2]
+  U  <- t(apply(Ui, 1, function(x) {u <- rep(0, nrow(S)); u[x] <- 1; u}))
+  Sl <- Sl[Sl[,1] < Sl[,2],3]
+
+  ##equivalent to:
+  #fit <- nlme::gls(y ~ x, correlation=corMLPE(form=~pop1+pop2, value=rho, fixed=TRUE), data=data.frame(y=Sl, x=Rl, pop1=Ui[,1], pop2=Ui[,2]), method="ML")
+
+  I        <- diag(nrow(U))
+  Sigma    <- (1-2*rho) * I + rho * U %*% t(U)
+  SigmaInv <- solve(Sigma)
+
+  X      <- cbind(1, Rl)
+  beta   <- solve(t(X) %*% SigmaInv %*% X) %*% t(X) %*% SigmaInv %*% Sl
+  e      <- Sl - X %*% beta
+  sigma  <- c(t(e) %*% SigmaInv %*% e / nrow(e)) # MLE (biased, but that doesn't matter here)
+  loglik <- -0.5 * 1/sigma * t(e) %*% SigmaInv %*% e - 0.5 * determinant(2 * pi * Sigma * sigma)$modulus
+
+  #can I solve for rho
+  # -0.5/sigma * SigmaInv %*% e %*% t(e) %*% SigmaInv - stuff SigmaInv = 0
+  #no
+
+  #can I solve for log(beta > 0
+  # X[,2] %*% 
+
+  #erg... profile stuff out
+  # dE = dL/dE + dL/dpars dpars/dE
+  # ddE = d(dL/dE)/dE + d(dL/dE)/dpars dpars/dE
+  # how does this help? adjoint method
+  # dL/dpars = 0
+  # ==> d(dL/dpars)/dE = 0
+  # ==> d2L/dpars2 dpars/dE + dL/dparsdE = 0
+  # ==> dpars/dE = -[d2L/dpars2]^{-1} dpars dE
+  #oh for fucks sake
+  #fn <- function(x) { X <- cbind(1,x); bhat <- solve(t(X)%*%X)%*%t(X)%*%y; e <- y - X2%*%bhat; -0.5 * t(e)%*%e }
+
+  attributes(loglik) <- NULL
+
+  dotR   <- matrix(0, nrow(R), ncol(R))
+  dotR[lower.tri(dotR)] <- 2 * beta[2]/sigma * c(solve(Sigma, e))
+  dotR   <- symm(dotR)
+  dotE   <- diag(nrow(R)) * (dotR %*% ones %*% t(ones)) - dotR
+  dotRho <- sum(diag((I - 1/sigma * SigmaInv %*% e %*% t(e)) %*% SigmaInv %*% (I - 0.5 * U %*% t(U)) ))
+
+  jacobian <- function(dE){
+    dR <- symm(2 * diag(dE) %*% t(ones) - 2 * dE)[lower.tri(dE)]
+    Vcov <- solve(t(X) %*% SigmaInv %*% X)
+    Xinv <- Vcov %*% t(SigmaInv %*% X)
+    Hat  <- X %*% Xinv
+    dr   <- 2 * beta[2]/sigma * c(SigmaInv %*% e)
+    I    <- diag(nrow(X))
+    I1   <- diag(2)[,-1, drop=FALSE]
+    to_X <- 
+      beta[2]^2/sigma * (Hat - I) %*% dR +
+      -0.5 * dr %*% t(dR) %*% t(Xinv) %*% I1 +
+      -0.5 * t(Xinv) %*% I1 %*% t(dr) %*% dR +
+      dr %*% t(dr) %*% dR %*% (sigma/4 * beta[2]^-2 * t(I1) %*% Vcov %*% I1 + 1/(2*nrow(E)))
+    to_R_from_X <- matrix(0, nrow(R), ncol(R))
+    to_R_from_X[lower.tri(to_R_from_X)] <- to_X#[,2]
+    to_R_from_X <- symm(to_R_from_X)
+    to_E_from_R <- 2 * diag(nrow(R)) * (to_R_from_X %*% ones %*% t(ones)) - 2 * to_R_from_X
+    return(to_E_from_R)
+  }
+
+  if (validate)
+  {
+    num_gradient     <- symm(matrix(numDeriv::grad(function(x) mlpe_regression(x, S, rho, FALSE)$objective, E), nrow(E), ncol(E)))
+    num_gradient_rho <- numDeriv::grad(function(x) mlpe_regression(E, S, x, FALSE)$objective, rho)
+  }
+
+  list(objective        = loglik, 
+       gradient         = dotE,
+       gradient_rho     = dotRho,
+       jacobian         = jacobian,
+       num_gradient     = if(validate) num_gradient else NULL,
+       num_gradient_rho = if(validate) num_gradient_rho else NULL)
+}
+
+generalized_wishart <- function(E, S, tau, sigma, nu, validate=TRUE)
+{
+  if (!(class(E) == "matrix" & class(S) == "matrix" & class(sigma) == "numeric" & class(tau) == "numeric" & class(nu) == "numeric" & 
+        all(dim(E) == dim(S)) & length(sigma) == 1 & length(tau) == 1 & length(nu) == 1 & sigma > 0 & tau > 0 & nu >= nrow(E)))
+    stop ("invalid inputs")
+
+  library(numDeriv)
+  library(reshape2)
+
+  symm      <- function(X) (X + t(X))/2
+  ones      <- matrix(1, nrow(S), 1)
+  I         <- diag(nrow(S))
+  Sigma     <- tau * E + sigma * I
+  SigmaInv  <- solve(Sigma)
+
+  W      <- I - ones %*% solve(t(ones) %*% SigmaInv %*% ones) %*% t(ones) %*% SigmaInv
+  P      <- eigen(SigmaInv %*% W)$vectors[,-nrow(SigmaInv)]
+  D      <- diag(eigen(SigmaInv %*% W)$values[-nrow(SigmaInv)])
+
+  grad_Sigma <- -nu * SigmaInv %*% W %*% (1/2 * P %*% solve(D) %*% t(P) + 1/4 * S) %*% t(W) %*% SigmaInv
+  grad_E     <- tau * grad_Sigma
+  grad_tau   <- sum(E * grad_Sigma)
+  grad_sigma <- sum(diag(grad_Sigma))
+
+  loglik <- nu/4 * sum(diag(SigmaInv %*% W %*% S)) + nu/2 * sum(log(diag(D)))
+
+  if (validate)
+  {
+    num_grad_E     <- symm(matrix(numDeriv::grad(function(x) generalized_wishart(x, S, tau, sigma, nu, FALSE)$objective, E), nrow(E), ncol(E)))
+    num_grad_tau   <- numDeriv::grad(function(x) generalized_wishart(E, S, x, sigma, nu, FALSE)$objective, tau)
+    num_grad_sigma <- numDeriv::grad(function(x) generalized_wishart(E, S, tau, x, nu, FALSE)$objective, sigma)
+  }
+
+  list(objective          = loglik, 
+       gradient           = grad_E, 
+       gradient_tau       = grad_tau,
+       gradient_sigma     = grad_sigma,
+       num_gradient       = if(validate) num_grad_E else NULL,
+       num_gradient_tau   = if(validate) num_grad_tau else NULL,
+       num_gradient_sigma = if(validate) num_grad_sigma else NULL)
+}
+
+..main.. <- function(seed)
+{
+
+  genotype_covariance <- function(Y)
+  {
+    freq <- rowMeans(Y)/2.
+    if (any(freq==0)) stop("invalid inputs")
+    Y <- (Y - 2*freq) / sqrt(2 * freq * (1-freq))
+    t(Y) %*% Y / nrow(Y)
+  }
+
+  genotype_distance <- function(Y)
+  {
+    S <- genotype_covariance(Y)
+    ones <- matrix(1, nrow(S), 1)
+    diag(S) %*% t(ones) + ones %*% t(diag(S)) - 2 * S
+  }
+
+  # simulated genotypes
+  set.seed(seed)
+  nsnp <- 100
+  nind <- 10
+  Y <- matrix(rbinom(nsnp * nind, size=2, prob=0.5), nsnp, nind)
+
+  R <- as.matrix(dist(cbind(runif(nind), runif(nind)))) # distances
+  E <- rWishart(1, nind, diag(nind))[,,1]
+
+  #TODO no longer using R as input
+  list(naive_regression    = naive_regression(R, genotype_covariance(Y)),
+       mlpe_regression     = mlpe_regression(R, genotype_covariance(Y), rho=0.1),
+       generalized_wishart = generalized_wishart(E, genotype_distance(Y), tau=0.5, sigma=0.6, nu=nsnp),
+       NULL)
+
+}
+
+..main..(1)[[2]]

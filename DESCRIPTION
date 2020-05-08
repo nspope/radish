@@ -1,0 +1,12 @@
+Package: radish2
+Type: Package
+Title: Fast gradient-based optimization of resistance surfaces
+Version: 0.0.1
+Date: 2020-05-05
+Author: Nathaniel S. Pope
+Maintainer: Nathaniel S. Pope <nspope@utexas.edu>
+Description: More about what it does (maybe more than one line)
+License: MIT
+Imports: Rcpp (>= 1.0.4), raster, numDeriv, Matrix, corMLPE
+Depends: Matrix
+LinkingTo: Rcpp, RcppArmadillo
