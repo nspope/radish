@@ -25,20 +25,30 @@ points(melip.coords)
 surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
 fit_mlpe <- radish_optimize(loglinear_conductance, mlpe, surface, melip.Fst)
 
-fit_mlpe$ztable
-fit_mlpe$loglik
-fit_mlpe$AIC
-plot(dist_from_cov(fit_mlpe$fit$covariance), melip.Fst, pch = 19,
-     xlab = "Optimized resistance distance", ylab = "Fst")
+fit_mlpe$ztable #MLE
+fit_mlpe$loglik #loglikelihood
+fit_mlpe$AIC    #AIC
+fit_mlpe$vcor   #correlation in asympotitic distribution of MLE
+plot(dist_from_cov(as.matrix(fit_mlpe$fit$covariance)), melip.Fst, pch = 19,
+     xlab = "Optimized resistance distance", ylab = "Fst") #visualize fit
 
-# visualise likelihood surface (takes awhile)
-theta <- as.matrix(expand.grid(x=seq(-4,4,length.out=15), y=seq(-4,4,length.out=15)))
-grid <- radish_grid(loglinear_conductance, leastsquares, surface, melip.Fst, theta, covariance=FALSE)
+# visualise likelihood surface across grid (takes awhile)
+theta <- as.matrix(expand.grid(x=seq(-6,6,length.out=21), y=seq(-6,6,length.out=21)))
+grid <- radish_grid(loglinear_conductance, mlpe, surface, melip.Fst, theta, covariance=FALSE)
 
 library(ggplot2)
 ggplot(data.frame(loglik=grid$loglik, grid$theta)) + 
-  geom_tile(aes(x=x,y=y,filoglik=-loglik)) + theme_bw() +
-  geom_contour(aes(x=x,y=y,z=-loglik), color="black") 
+  geom_tile(aes(x=x,y=y,fill=-loglik)) + theme_bw() +
+  geom_contour(aes(x=x,y=y,z=-loglik), color="black") +
+  xlab(expression(theta[altitude])) +
+  ylab(expression(theta[forestcover]))
+
+# calculate resistance distances across grid
+distances <- radish_distance(loglinear_conductance, surface, theta)
+
+plot(distances$distance[,,which(theta[,1] == 0 & theta[,2] == 0)],
+     melip.Fst, pch = 19, xlab = "IBD resistance distance", ylab = "Fst")
+
 
 ```
  

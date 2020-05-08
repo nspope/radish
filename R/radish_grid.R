@@ -4,7 +4,7 @@ radish_grid <- function(f, g, s, S, theta, nonnegative = TRUE, covariance = FALS
   stopifnot( ncol(theta) == ncol(s$x))
 
   ll  <- rep(NA, nrow(theta))
-  phi <- matrix(NA, length(g(S = S, E = rWishart(1, nrow(S), diag(nrow(S)))[,,1])), nrow(theta))
+  phi <- matrix(NA, length(g(S = S, E = rWishart(1, nrow(S), diag(nrow(S)))[,,1])$phi), nrow(theta))
   if (covariance)
     cv  <- array(NA, c(length(s$demes), length(s$demes), nrow(theta)))
 
@@ -19,7 +19,7 @@ radish_grid <- function(f, g, s, S, theta, nonnegative = TRUE, covariance = FALS
       ll[i]   <- obj$objective
       phi[,i] <- obj$phi
       if (covariance)
-        cv[,,i] <- obj$covariance
+        cv[,,i] <- as.matrix(obj$covariance)
     })
 
   df <- list(theta = data.frame(theta), 
@@ -46,7 +46,7 @@ radish_distance <- function(f, s, theta, covariance = FALSE)
                                   hessian   = FALSE,
                                   partial   = FALSE,
                                   nonnegative = nonnegative)
-      cv[,,i] <- if(covariance) obj$covariance else dist_from_cov(obj$covariance)
+      cv[,,i] <- if(covariance) as.matrix(obj$covariance) else dist_from_cov(as.matrix(obj$covariance))
     })
 
   df <- list(theta = data.frame(theta))

@@ -71,12 +71,16 @@ radish_optimize <- function(f, g, s, S, theta = rep(0, ncol(s$x)), leverage = TR
     ztable[,"StdErr"] <- diag(solve(fit$hessian))
     ztable[,"Z"]      <- ztable[,"Est"]/ztable[,"StdErr"]
     ztable[,"pval"]   <- pmin(2*(1 - pnorm(abs(ztable[,"Z"]))), 1)
+
+    vcor <- cov2cor(solve(fit$hessian))
+    rownames(vcor) <- colnames(vcor) <- s$covariates
   }
 
   list(fcall          = .fcall, #DEBUG
        fit            = fit,
        theta          = theta,
        ztable         = ztable,
+       vcor           = as.dist(vcor),
        AIC            = 2*fit$objective + 2*length(theta) + 2*length(fit$phi),
        phi            = fit$phi,
        loglikelihood  = -fit$objective,
