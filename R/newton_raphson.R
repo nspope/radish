@@ -1,5 +1,7 @@
 BFGS <- function(par, fn, lower = rep(-Inf, length(par)), upper = rep(Inf, length(par)), control = NewtonRaphsonControl())
 {
+  #TODO: this isn't finished
+
   BFGSNaN <- function()
   {
     list(objective = NaN,
@@ -228,6 +230,7 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
        hessian = fit$hessian,
        value = fit$objective,
        fit = fit,
+       iters = i,
        boundary = boundary_fit,
        convergence = convergence)
 

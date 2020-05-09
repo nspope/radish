@@ -1,3 +1,33 @@
+#' Likelihood of parameterized conductance surface
+#'
+#' Calculates likelihood, gradient, hessian, and partial derivatives
+#' of the likelihood of a parameterized conductance surface,
+#' given a function mapping spatial data to conductance and a function
+#' mapping resistance distance (covariance) to genetic distance.
+#'
+#' @param f A function of class 'conductance_model'
+#' @param g A function of class 'measurement_model'
+#' @param s An object of class 'radish_graph'
+#' @param S A matrix of observed genetic distances
+#' @param theta Parameters for conductance surface (e.g. inputs to 'f')
+#' @param objective Compute negative loglikelihood?
+#' @param gradient Compute gradient of negative loglikelihood wrt theta?
+#' @param hessian Compute Hessian matrix of negative loglikelihood wrt theta?
+#' @param partial Compute partial derivatives of negative loglikelihood wrt theta and spatial covariates/observed genetic distances
+#' @param nonnegative Force regression-like 'measurement_model' to have nonnegative slope?
+#' @param validate Numerical validation via 'numDeriv' (very slow, use for debugging small examples)
+#'
+#' @return A list containing
+#'  \item{Something}{something}
+#'  \item{Something}{something}
+#'
+#' @examples
+#'  data(melip)
+#'  make raster here
+#'  surface <- radish_conductance_surface()
+#'
+#' @export
+
 radish_algorithm <- function(f, g, s, S, theta = rep(0, ncol(s$x)), objective = TRUE, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
 {
   stopifnot(    class(f) == "radish_conductance_model")
@@ -145,6 +175,7 @@ radish_algorithm <- function(f, g, s, S, theta = rep(0, ncol(s$x)), objective = 
         num_partial_S = if(!validate)  NULL else num_partial_S)
 }
 
+# deprecated
 DEPR_radish_algorithm <- function(f, g, s, S, theta = rep(0, ncol(s$x)), objective = TRUE, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
 {
   stopifnot(    class(f) == "radish_conductance_model")

@@ -2,7 +2,11 @@
 
 Fast gradient-based optimization of resistance surfaces.
 
+![Likelihood surface for a two parameter conductance model](https://github.com/nspope/radish/ms/likelihood_surface.png)
+
 Requires [corMLPE](https://github.com/nspope/corMLPE): `devtools::install_github("nspope/corMLPE")`
+
+This is still a work-in-progress and the interface/methods may change without notice. Contact at nspope at utexas dot edu.
 
 ```r
 library(radish)
@@ -23,14 +27,12 @@ plot(covariates[["altitude"]])
 points(melip.coords)
 
 surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
-fit_mlpe <- radish_optimize(loglinear_conductance, mlpe, surface, melip.Fst)
+fit_mlpe <- radish(loglinear_conductance, mlpe, surface, melip.Fst)
 
-fit_mlpe$ztable #MLE
-fit_mlpe$loglik #loglikelihood
-fit_mlpe$AIC    #AIC
-fit_mlpe$vcor   #correlation in asymptotic distribution of MLE
-plot(dist_from_cov(as.matrix(fit_mlpe$fit$covariance)), melip.Fst, pch = 19,
-     xlab = "Optimized resistance distance", ylab = "Fst") #visualize fit
+summary(fit_mlpe)
+
+plot(fitted(fit_mlpe, "distance"), melip.Fst, pch = 19,
+     xlab = "Optimized resistance distance", ylab = "Fst")
 
 # visualise likelihood surface across grid (takes awhile)
 theta <- as.matrix(expand.grid(x=seq(-6,6,length.out=21), y=seq(-6,6,length.out=21)))
@@ -46,10 +48,8 @@ ggplot(data.frame(loglik=grid$loglik, grid$theta)) +
 # calculate resistance distances across grid
 distances <- radish_distance(loglinear_conductance, surface, theta)
 
-plot(distances$distance[,,which(theta[,1] == 0 & theta[,2] == 0)],
-     melip.Fst, pch = 19, xlab = "Null resistance distance (IBD)", ylab = "Fst")
-
-
+ibd <- which(theta[,1] == 0 & theta[,2] == 0)
+plot(distances$distance[,,ibd], melip.Fst, pch = 19, 
+     xlab = "Null resistance distance (IBD)", ylab = "Fst")
 ```
  
-This is still very much a work-in-progress. Contact at nspope at utexas dot edu.
