@@ -28,7 +28,7 @@ fit_mlpe <- radish_optimize(loglinear_conductance, mlpe, surface, melip.Fst)
 fit_mlpe$ztable #MLE
 fit_mlpe$loglik #loglikelihood
 fit_mlpe$AIC    #AIC
-fit_mlpe$vcor   #correlation in asympotitic distribution of MLE
+fit_mlpe$vcor   #correlation in asymptotic distribution of MLE
 plot(dist_from_cov(as.matrix(fit_mlpe$fit$covariance)), melip.Fst, pch = 19,
      xlab = "Optimized resistance distance", ylab = "Fst") #visualize fit
 
@@ -47,9 +47,9 @@ ggplot(data.frame(loglik=grid$loglik, grid$theta)) +
 distances <- radish_distance(loglinear_conductance, surface, theta)
 
 plot(distances$distance[,,which(theta[,1] == 0 & theta[,2] == 0)],
-     melip.Fst, pch = 19, xlab = "IBD resistance distance", ylab = "Fst")
+     melip.Fst, pch = 19, xlab = "Null resistance distance (IBD)", ylab = "Fst")
 
 
 ```
  
-This is still very much a work-in-progress. Contact at nspope@utexas.edu.
+This is still very much a work-in-progress. Contact at nspope at utexas dot edu.
