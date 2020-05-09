@@ -2,7 +2,7 @@
 
 Fast gradient-based optimization of resistance surfaces.
 
-![Likelihood surface for a two parameter conductance model](https://github.com/nspope/radish/tree/master/ms/likelihood_surface.png)
+![Likelihood surface for a two parameter conductance model](ms/likelihood_surface.png)
 
 Requires [corMLPE](https://github.com/nspope/corMLPE): `devtools::install_github("nspope/corMLPE")`
 
