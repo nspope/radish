@@ -27,7 +27,7 @@ plot(covariates[["altitude"]])
 points(melip.coords)
 
 surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
-fit_mlpe <- radish(loglinear_conductance, mlpe, surface, melip.Fst)
+fit_mlpe <- radish(radish::loglinear_conductance, radish::mlpe, surface, melip.Fst)
 
 summary(fit_mlpe)
 

@@ -171,9 +171,9 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
     if (verbose)
       cat(paste0("[", i, "]"), 
           "f(x) =", prettify(-fit$objective),
-          "  |\u0394 f(x)| =", prettify(delta),
-          "  max|\u2207 f(x)| =", prettify(max(abs(fit$gradient))),
-          "  -|f''(x)| =", prettify(det(fit$hessian)),
+          "  |f(x)-fold(x)| =", prettify(delta),
+          "  max|f'(x)| =", prettify(max(abs(fit$gradient))),
+          "  |f''(x)| =", prettify(-det(fit$hessian)),
           "\n")
 
     if (max(abs(fit$gradient)) < ctol || (i > 1 && delta < ftol))
@@ -204,7 +204,7 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
     alpha <- tryCatch({
     HagerZhang(dphi_fn, phi0, dphi0, control = ls.control)
     }, error = function(err) {
-      cat("Switched to backtracking\n")
+      cat("Switched to backtracking for remainder of step\n")
     Backtracking(dphi_fn, phi0, dphi0)
     })
     par   <- project(par + alpha*desc, lower, upper)
