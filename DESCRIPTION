@@ -7,6 +7,6 @@ Author: Nathaniel S. Pope
 Maintainer: Nathaniel S. Pope <nspope@utexas.edu>
 Description: More about what it does (maybe more than one line)
 License: MIT
-Imports: Rcpp (>= 1.0.4), raster, numDeriv, Matrix, corMLPE
+Imports: Rcpp (>= 1.0.4), raster, numDeriv, Matrix, corMLPE, MASS
 Depends: Matrix
 LinkingTo: Rcpp, RcppArmadillo
