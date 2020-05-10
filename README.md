@@ -2,7 +2,7 @@
 
 Fast gradient-based optimization of resistance surfaces.
 
-`radish` is an R package for maximum likelihood estimation of isolation-by-resistance models, where conductance is a strictly positive function of spatial covariates, the observed data are genetic distances, and the likelihood of the "measurement process" is cheap to compute (e.g. regression of distance matrices, or generalized Wishart).
+`radish` is an R package for maximum likelihood estimation of isolation-by-resistance models, where conductance is a function of spatial covariates, the observed data are genetic distances, and the likelihood of the "measurement process" is cheap to compute (e.g. regression of distance matrices, or generalized Wishart).
 
 ![Likelihood surface for a two parameter conductance model](ms/likelihood_surface.png)
 
