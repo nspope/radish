@@ -10,7 +10,7 @@ Requires [corMLPE](https://github.com/nspope/corMLPE): `devtools::install_github
 
 This is a work-in-progress and the interface/methods may change without notice. Contact at nspope at utexas dot edu.
 
-# Minimal example
+# Worked example
 
 ```r
 library(radish)
