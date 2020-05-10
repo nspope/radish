@@ -1,4 +1,4 @@
-leastsquares <- function(E, S, phi, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
+leastsquares <- function(E, S, nu, phi, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
 {
   symm <- function(X) (X + t(X))/2
 

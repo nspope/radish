@@ -4,9 +4,11 @@ Fast gradient-based optimization of resistance surfaces.
 
 ![Likelihood surface for a two parameter conductance model](ms/likelihood_surface.png)
 
-Requires [corMLPE](https://github.com/nspope/corMLPE): `devtools::install_github("nspope/corMLPE")`
+Requires [corMLPE](https://github.com/nspope/corMLPE): `devtools::install_github("nspope/corMLPE")`. Other dependencies are available through CRAN. Install `radish` via `devtools::install_github("nspope/radish")`.
 
-This is still a work-in-progress and the interface/methods may change without notice. Contact at nspope at utexas dot edu.
+This is a work-in-progress and the interface/methods may change without notice. Contact at nspope at utexas dot edu.
+
+# Minimal example
 
 ```r
 library(radish)
@@ -51,5 +53,20 @@ distances <- radish_distance(loglinear_conductance, surface, theta)
 ibd <- which(theta[,1] == 0 & theta[,2] == 0)
 plot(distances$distance[,,ibd], melip.Fst, pch = 19, 
      xlab = "Null resistance distance (IBD)", ylab = "Fst")
+
+# compute negative loglikelihood, gradient, Hessian for a given choice of
+# of the conductance parameters theta, using a different measurement model
+# (radish::generalized_wishart)
+radish_algorithm(radish::loglinear_conductance, radish::generalized_wishart, surface, 
+                 ifelse(melip.Fst < 0, 0, melip.Fst), nu = 1000, theta = c(-0.3, 0.3), 
+                 gradient = TRUE, hessian = TRUE)$hessian
+# numerical verification (not run)
+#numDeriv::hessian(function(x)
+#     radish_algorithm(radish::loglinear_conductance, radish::generalized_wishart, surface, 
+#                      ifelse(melip.Fst < 0, 0, melip.Fst), nu = 1000, theta = x,
+#                      gradient = TRUE, hessian = TRUE)$objective,
+#               c(-0.3, 0.3))
 ```
  
+# RStan hooks
+In progress

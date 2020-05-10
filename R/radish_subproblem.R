@@ -1,9 +1,9 @@
-radish_subproblem <- function(g, E, S, phi = g(E = E, S = S, nonnegative = nonnegative), nonnegative = TRUE, validate = FALSE, control = NewtonRaphsonControl(ctol = 1e-10, ftol = 1e-10, verbose = TRUE))
+radish_subproblem <- function(g, E, S, nu, phi = g(E = E, S = S, nonnegative = nonnegative), nonnegative = TRUE, validate = FALSE, control = NewtonRaphsonControl(ctol = 1e-10, ftol = 1e-10, verbose = TRUE))
 {
   # use Newton-Raphson to profile out nuisance parameters
   subproblem  <- BoxConstrainedNewton(phi$phi, 
                                function(par, gradient, hessian) 
-                                 g(E = E, S = S, phi = c(par), 
+                                 g(E = E, S = S, nu = nu, phi = c(par), 
                                    gradient = gradient, 
                                    hessian = hessian, 
                                    partial = FALSE, 
@@ -14,7 +14,7 @@ radish_subproblem <- function(g, E, S, phi = g(E = E, S = S, nonnegative = nonne
 
   # refit, computing partial derivatives
   phi         <- subproblem$par
-  fit         <- g(E = E, S = S, phi = c(phi), partial = TRUE, nonnegative = nonnegative)
+  fit         <- g(E = E, S = S, nu = nu, phi = c(phi), partial = TRUE, nonnegative = nonnegative)
   gradient_E  <- fit$gradient_E
 
   # for hessian, need to get d(dg/dE)/dE via adjoint method,
@@ -27,7 +27,6 @@ radish_subproblem <- function(g, E, S, phi = g(E = E, S = S, nonnegative = nonne
   invhess     <- MASS::ginv(fit$hessian)
   jacobian_E  <- function(dotdotE)
   { 
-    #TODO: I think partial_E is the *lower* triangle, not the full matrix?
     #why is this nonzero when on boundary?
     dphi_dE   <- -matrix(c(dotdotE) %*% partial_E %*% invhess %*% t(partial_E), nrow(dotdotE), ncol(dotdotE))
     return (fit$jacobian_E(dotdotE) + dphi_dE)

@@ -28,14 +28,14 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #'
 #' @export
 
-radish <- function(f, g, s, S, theta = rep(0, ncol(s$x)), leverage = TRUE, nonnegative = TRUE, validate = FALSE, control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-6, ftol = 1e-6))
+radish <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = TRUE, nonnegative = TRUE, validate = FALSE, control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-6, ftol = 1e-6))
 {
   fcalls  <- new("FunctionCall", count = 0L)
   problem <- BoxConstrainedNewton(theta, 
                            function(par, gradient, hessian) 
                            {
                              fcalls$count <- fcalls$count + 1L
-                             radish_algorithm(f = f, g = g, s = s, S = S, theta = c(par), 
+                             radish_algorithm(f = f, g = g, s = s, S = S, nu = nu, theta = c(par), 
                                               gradient = gradient, 
                                               hessian = hessian, 
                                               partial = FALSE, 
@@ -43,7 +43,7 @@ radish <- function(f, g, s, S, theta = rep(0, ncol(s$x)), leverage = TRUE, nonne
                            },
                            control = control)
   theta <- problem$par
-  fit   <- radish_algorithm(f = f, g = g, s = s, S = S, theta = theta,
+  fit   <- radish_algorithm(f = f, g = g, s = s, S = S, nu = nu, theta = theta,
                             gradient = TRUE, hessian = TRUE, partial = leverage,
                             nonnegative = nonnegative)
 

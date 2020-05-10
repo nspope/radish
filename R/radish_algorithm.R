@@ -28,7 +28,7 @@
 #'
 #' @export
 
-radish_algorithm <- function(f, g, s, S, theta = rep(0, ncol(s$x)), objective = TRUE, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
+radish_algorithm <- function(f, g, s, S, nu, theta = rep(0, ncol(s$x)), objective = TRUE, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
 {
   stopifnot(    class(f) == "radish_conductance_model")
   stopifnot(    class(g) == "radish_measurement_model")
@@ -68,7 +68,7 @@ radish_algorithm <- function(f, g, s, S, theta = rep(0, ncol(s$x)), objective = 
   if (objective || gradient || hessian)
   {
     # measurement model
-    subproblem <- radish_subproblem(g = g, E = as.matrix(E), S = S, 
+    subproblem <- radish_subproblem(g = g, E = as.matrix(E), S = S, nu = nu,
                                     nonnegative = nonnegative,
                                     control = NewtonRaphsonControl(verbose = FALSE, 
                                                                    ftol = 1e-10, 
@@ -120,42 +120,38 @@ radish_algorithm <- function(f, g, s, S, theta = rep(0, ncol(s$x)), objective = 
   if (validate)
   {
     num_gradient <- numDeriv::grad(function(theta) 
-                                   radish_algorithm(g = g, 
+                                   radish_algorithm(f = f,
+                                                    g = g, 
+                                                    s = s,
                                                     S = S, 
-                                                    theta = theta, 
-                                                    x = x, 
-                                                    demes = demes, 
-                                                    adj = adj)$objective, 
+                                                    theta = theta)$objective, 
                                    theta, method = "Richardson")
 
     num_hessian  <- numDeriv::hessian(function(theta) 
-                                      radish_algorithm(g = g, 
+                                      radish_algorithm(f = f,
+                                                       g = g, 
+                                                       s = s,
                                                        S = S, 
-                                                       theta = theta, 
-                                                       x = x, 
-                                                       demes = demes, 
-                                                       adj = adj)$objective, 
+                                                       theta = theta)$objective, 
                                       theta, method = "Richardson")
 
     num_partial_X  <- array(0, c(nrow(s$x), length(theta), length(theta)))
     for (l in 1:length(theta))
       num_partial_X[,,l] <- t(numDeriv::jacobian(function(z) {
-                                                 x[,l] <- z
-                                                 radish_algorithm(g = g, 
+                                                 s$x[,l] <- z
+                                                 radish_algorithm(f = f,
+                                                                  g = g, 
+                                                                  s = s,
                                                                   S = S, 
-                                                                  theta = theta, 
-                                                                  x = x, 
-                                                                  demes = demes, 
-                                                                  adj = adj)$gradient },
-                                                  x[,l], method="simple"))
+                                                                  theta = theta)$gradient },
+                                                 s$x[,l], method="simple"))
 
     num_partial_S <- array(t(numDeriv::jacobian(function(S) 
-                                                radish_algorithm(g = g, 
+                                                radish_algorithm(f = f,
+                                                                 g = g, 
+                                                                 s = s,
                                                                  S = S, 
-                                                                 theta = theta, 
-                                                                 x = x, 
-                                                                 demes = demes, 
-                                                                 adj = adj)$gradient, 
+                                                                 theta = theta)$gradient, 
                                                 S, method = "simple")), 
                            c(nrow(S), ncol(S), length(theta)))
   }
