@@ -40,7 +40,7 @@ plot(fitted(fit_mlpe, "distance"), melip.Fst, pch = 19,
 
 # visualise likelihood surface across grid (takes awhile)
 theta <- as.matrix(expand.grid(x=seq(-6,6,length.out=21), y=seq(-6,6,length.out=21)))
-grid <- radish_grid(loglinear_conductance, mlpe, surface, melip.Fst, theta, covariance=FALSE)
+grid <- radish_grid(radish::loglinear_conductance, radish::mlpe, surface, melip.Fst, theta, covariance=FALSE)
 
 library(ggplot2)
 ggplot(data.frame(loglik=grid$loglik, grid$theta)) + 
@@ -50,7 +50,7 @@ ggplot(data.frame(loglik=grid$loglik, grid$theta)) +
   ylab(expression(theta[forestcover]))
 
 # calculate resistance distances across grid
-distances <- radish_distance(loglinear_conductance, surface, theta)
+distances <- radish_distance(radish::loglinear_conductance, surface, theta)
 
 ibd <- which(theta[,1] == 0 & theta[,2] == 0)
 plot(distances$distance[,,ibd], melip.Fst, pch = 19, 
@@ -65,9 +65,8 @@ radish_algorithm(radish::loglinear_conductance, radish::generalized_wishart, sur
 # numerical verification (not run)
 #numDeriv::hessian(function(x)
 #     radish_algorithm(radish::loglinear_conductance, radish::generalized_wishart, surface, 
-#                      ifelse(melip.Fst < 0, 0, melip.Fst), nu = 1000, theta = x,
-#                      gradient = TRUE, hessian = TRUE)$objective,
-#               c(-0.3, 0.3))
+#                      ifelse(melip.Fst < 0, 0, melip.Fst), nu = 1000, theta = x)$objective,
+#                  c(-0.3, 0.3))
 ```
  
 # RStan hooks
