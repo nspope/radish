@@ -8,7 +8,7 @@ Fast gradient-based optimization of resistance surfaces.
 
 Requires [corMLPE](https://github.com/nspope/corMLPE): `devtools::install_github("nspope/corMLPE")`. Other dependencies are available through CRAN. Install `radish` via `devtools::install_github("nspope/radish")`.
 
-This is a work-in-progress and the interface/methods may change without notice. Contact at nspope at utexas dot edu.
+This is a work-in-progress and the interface/methods may change suddenly. Contact at nspope at utexas dot edu.
 
 # Worked example
 
