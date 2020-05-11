@@ -5,8 +5,8 @@ Version: 0.0.1
 Date: 2020-05-05
 Author: Nathaniel S. Pope
 Maintainer: Nathaniel S. Pope <nspope@utexas.edu>
-Description: More about what it does (maybe more than one line)
+Description: Maximum likelihood estimation for parameterized conductance models via Newton and quasi-Newton methods, for moderate-sized problems (e.g. rasters with less than a million cells)
 License: MIT
-Imports: Rcpp (>= 1.0.4), raster, numDeriv, Matrix, corMLPE, MASS
+Imports: Rcpp (>= 1.0.4), raster, numDeriv, Matrix, nlme, corMLPE, MASS
 Depends: Matrix
 LinkingTo: Rcpp, RcppArmadillo

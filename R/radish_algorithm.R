@@ -1,14 +1,15 @@
 #' Likelihood of parameterized conductance surface
 #'
-#' Calculates likelihood, gradient, hessian, and partial derivatives
-#' of the likelihood of a parameterized conductance surface,
-#' given a function mapping spatial data to conductance and a function
-#' mapping resistance distance (covariance) to genetic distance.
+#' Calculates likelihood, gradient, hessian, and partial derivatives of a
+#' parameterized conductance surface, given a function mapping spatial data to
+#' conductance and a function mapping resistance distance (covariance) to
+#' genetic distance; using the algorithm in Pope (in prep).
 #'
 #' @param f A function of class 'conductance_model'
 #' @param g A function of class 'measurement_model'
 #' @param s An object of class 'radish_graph'
 #' @param S A matrix of observed genetic distances
+#' @param nu Number of genetic markers (potentially used by 'g')
 #' @param theta Parameters for conductance surface (e.g. inputs to 'f')
 #' @param objective Compute negative loglikelihood?
 #' @param gradient Compute gradient of negative loglikelihood wrt theta?
@@ -17,14 +18,32 @@
 #' @param nonnegative Force regression-like 'measurement_model' to have nonnegative slope?
 #' @param validate Numerical validation via 'numDeriv' (very slow, use for debugging small examples)
 #'
-#' @return A list containing
-#'  \item{Something}{something}
-#'  \item{Something}{something}
+#' @return A list containing at a minimum:
+#'  \item{covariance}{rows/columns of the generalized inverse of the graph Laplacian for a subset of target vertices}
+#' Additionally, if 'objective == TRUE':
+#'  \item{objective}{(if 'objective') the negative loglikelihood}
+#'  \item{phi}{(if 'objective') fitted values of the nuisance parameters of 'g'}
+#'  \item{boundary}{(if 'objective') is the solution on the boundary (e.g. no genetic structure)?}
+#'  \item{fitted}{(if 'objective') matrix of expected genetic distances among target vertices}
+#'  \item{gradient}{(if 'gradient') gradient of negative loglikelihood with respect to theta}
+#'  \item{hessian}{(if 'hessian') Hessian matrix of the negative loglikelihood with respect to theta}
+#'  \item{partial_X}{(if 'partial') Jacobian of the gradient with respect to the spatial covariates}
+#'  \item{partial_S}{(if 'partial') Jacobian of the gradient with respect to the observed genetic distances}
+#'
+#' @references
+#'
+#' Pope NS. In prep. Fast gradient-based optimization of resistance surfaces.
 #'
 #' @examples
-#'  data(melip)
-#'  make raster here
-#'  surface <- radish_conductance_surface()
+#' library(raster)
+#' 
+#' data(melip)
+#' 
+#' covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
+#' surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
+#' 
+#' radish_algorithm(radish::loglinear_conductance, radish::leastsquares, surface, 
+#'                  ifelse(melip.Fst < 0, 0, melip.Fst), nu = 1000, theta = c(-0.3, 0.3))
 #'
 #' @export
 

@@ -17,14 +17,18 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' @param validate Numerical validation via 'numDeriv' (very slow, use for debugging small examples)
 #' @param control A list containing options for the optimization routine (see ?NewtonRaphsonControl for list)
 #'
-#' @return A list containing
-#'  \item{Something}{something}
-#'  \item{Something}{something}
+#' @return An object of class 'radish'
 #'
 #' @examples
-#'  data(melip)
-#'  make raster here
-#'  surface <- radish_conductance_surface()
+#' library(raster)
+#' 
+#' data(melip)
+#' 
+#' covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
+#' surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
+#' 
+#' fit_nnls <- radish(radish::loglinear_conductance, radish::leastsquares, surface, melip.Fst)
+#' summary(fit_nnls)
 #'
 #' @export
 
