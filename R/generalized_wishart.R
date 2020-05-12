@@ -7,8 +7,8 @@
 #'
 #' @param E A submatrix of the generalized inverse of the graph Laplacian (alternatively, a covariance matrix)
 #' @param S A matrix of observed genetic distances
-#' @param nu Number of genetic markers
 #' @param phi Nuisance parameters (see details)
+#' @param nu Number of genetic markers
 #' @param gradient Compute gradient of negative loglikelihood wrt phi?
 #' @param hessian Compute Hessian matrix of negative loglikelihood wrt phi?
 #' @param partial Compute second partial derivatives of negative loglikelihood wrt phi and spatial covariates/observed genetic distances
@@ -50,11 +50,11 @@
 #' laplacian_inv <- radish_distance(radish::loglinear_conductance, surface, 
 #'                                  theta = matrix(0, 1, 2), covariance = TRUE)$covariance[,,1]
 #' 
-#' generalized_wishart(laplacian_inv, melip.Fst, nu = NULL, phi = c(0.1, 0.5))
+#' generalized_wishart(laplacian_inv, melip.Fst, phi = c(0.1, 0.5), nu = 1000)
 #'
 #' @export
 
-generalized_wishart <- function(E, S, nu, phi, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
+generalized_wishart <- function(E, S, phi, nu, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
 {
   symm <- function(X) (X + t(X))/2
 
@@ -62,11 +62,11 @@ generalized_wishart <- function(E, S, nu, phi, gradient = TRUE, hessian = TRUE, 
   {
     return(list(phi = c(1, 0), lower = c(0, -Inf), upper = c(Inf, Inf)))
   }
-  else if (!(class(E)    == "matrix"    & 
-             class(S)    == "matrix"    & 
-             all(dim(E)  == dim(S))     &
-             class(phi)  == "numeric"   & 
-             length(phi) == 2           ))
+  else if (!(is.matrix(E)    & 
+             is.matrix(S)    & 
+             all(dim(E)  == dim(S)) &
+             is.numeric(phi) & 
+             length(phi) == 2 ))
     stop ("invalid inputs")
 
   stopifnot(nu > 0)

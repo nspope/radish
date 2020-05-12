@@ -1,4 +1,33 @@
-radish_conductance_surface <- function(covariates, coords, directions=8, saveStack=TRUE)
+#' Create a parameterized conductance surface
+#'
+#' Given a set of spatial covariates (as a 'RasterStack') and a set of
+#' spatial coordinates (class 'SpatialPoints'), create an abstract parameterized
+#' conductance surface.
+#'
+#' @param covariates A 'RasterStack' containing spatial covariates
+#' @param coords A 'SpatialPoints' object containing coordinates for a set of target cells
+#' @param directions If '4', consider only horizontal/vertical neighbours as adjacent; if '8', also consider diagonal neighbours as adjacent
+#' @param saveStack If TRUE, the modified RasterStack is returned
+#'
+#' @details NAs are shared across components of the RasterStack, and a warning is thrown if a given cell has mixed NA and non-NA values across the stack. Disconnect components are identified and removed (only the largest connected component is retained).
+#'
+#' @return An object of class 'radish_graph'
+#'
+#' @references
+#'
+#' Pope NS. In prep. Fast gradient-based optimization of resistance surfaces.
+#'
+#' @examples
+#' library(raster)
+#' 
+#' data(melip)
+#' 
+#' covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
+#' surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
+#'
+#' @export
+
+radish_conductance_surface <- function(covariates, coords, directions=c(4, 8), saveStack=TRUE)
 {
   stopifnot(class(covariates) == "RasterStack"  )
   stopifnot(    class(coords) == "SpatialPoints")

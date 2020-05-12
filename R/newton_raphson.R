@@ -345,7 +345,7 @@ HagerZhang <- function (dphifn, phi_0, dphi_0, control = HagerZhangControl())
     else
     {
       # We'll still going downhill, expand the interval and try again.
-      # Reaching this branch means that dphi_c < 0 and phi_c <= phi_0 + ϵ_k
+      # Reaching this branch means that dphi_c < 0 and phi_c <= phi_0 + e_k 
       # So cold = c has a lower objective than phi_0 up to epsilon. 
       # This makes it a viable step to return if bracketing fails.
 
@@ -650,9 +650,15 @@ bisect <- function(dphifn, st, ia, ib, phi_lim, verbose)
     return (list(ia, ib))
 }
 
+#' Control settings for Newton-Raphson optimizer
+#'
+#' TODO after finalizing line search
+#'
+#' @export
 NewtonRaphsonControl <- function(maxit = 100, ctol = sqrt(.Machine$double.eps), ftol = sqrt(.Machine$double.eps), etol = 10*.Machine$double.eps, verbose = FALSE, eps = 1e-8, ls.control = HagerZhangControl())
   list(maxit = maxit, ctol = ctol, etol = etol, ftol = ftol, verbose = verbose, eps = eps, ls.control = ls.control)
 
+# deprecated, should delete at some point
 NewtonRaphson <- function(par, fn, control = NewtonRaphsonControl())
 {
   NewtonRaphsonNaN <- function()

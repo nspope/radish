@@ -9,8 +9,8 @@
 #' @param g A function of class 'measurement_model'
 #' @param s An object of class 'radish_graph'
 #' @param S A matrix of observed genetic distances
-#' @param nu Number of genetic markers (potentially used by 'g')
 #' @param theta Parameters for conductance surface (e.g. inputs to 'f')
+#' @param nu Number of genetic markers (potentially used by 'g')
 #' @param objective Compute negative loglikelihood?
 #' @param gradient Compute gradient of negative loglikelihood wrt theta?
 #' @param hessian Compute Hessian matrix of negative loglikelihood wrt theta?
@@ -47,13 +47,14 @@
 #'
 #' @export
 
-radish_algorithm <- function(f, g, s, S, nu, theta = rep(0, ncol(s$x)), objective = TRUE, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
+radish_algorithm <- function(f, g, s, S, theta = rep(0, ncol(s$x)), nu = NULL, objective = TRUE, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
 {
-  stopifnot(    class(f) == "radish_conductance_model")
-  stopifnot(    class(g) == "radish_measurement_model")
-  stopifnot(    class(s) == "radish_graph"            )
-  stopifnot(    class(S) == "matrix"                  )
-  stopifnot(class(theta) == "numeric"                 )
+  stopifnot(    class(f)  ==  "radish_conductance_model")
+  stopifnot(    class(g)  ==  "radish_measurement_model")
+  stopifnot(    class(s)  ==  "radish_graph"            )
+
+  stopifnot(is.matrix(S)     )
+  stopifnot(is.numeric(theta))
 
   stopifnot(  length(theta) == ncol(s$x))
   stopifnot(length(s$demes) == nrow(S)  )

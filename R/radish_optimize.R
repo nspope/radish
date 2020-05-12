@@ -2,15 +2,16 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 
 #' Optimize a parameterized conductance surface
 #'
-#' Calculates likelihood, gradient, hessian, and partial derivatives
-#' of the likelihood of a parameterized conductance surface,
-#' given a function mapping spatial data to conductance and a function
-#' mapping resistance distance (covariance) to genetic distance.
+#' Calculates likelihood, gradient, hessian, and partial derivatives of a
+#' parameterized conductance surface, given a function mapping spatial data to
+#' conductance and a function mapping resistance distance (covariance) to
+#' genetic distance.
 #'
 #' @param f A function of class 'conductance_model'
 #' @param g A function of class 'measurement_model'
 #' @param s An object of class 'radish_graph'
 #' @param S A matrix of observed genetic distances
+#' @param nu Number of genetic markers (potentially used by 'g')
 #' @param theta Starting values for optimization
 #' @param leverage Compute influence measures and leverage?
 #' @param nonnegative Force regression-like 'measurement_model' to have nonnegative slope?

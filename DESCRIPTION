@@ -10,3 +10,4 @@ License: MIT
 Imports: Rcpp (>= 1.0.4), raster, numDeriv, Matrix, nlme, corMLPE, MASS
 Depends: Matrix
 LinkingTo: Rcpp, RcppArmadillo
+RoxygenNote: 7.1.0
