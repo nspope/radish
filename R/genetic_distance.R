@@ -1,6 +1,22 @@
-# TODO: missing data?
-fst_from_biallelic_genotypes <- function(Y, N)
+#' Fst from allele counts
+#'
+#' Calculates Fst using the estimator of Bhatia et al (2015)
+#' from counts of the derived allele across biallelic makers
+#'
+#' @param Y A matrix containing allele counts, of dimension (number of demes) x (number of loci)
+#' @param N A matrix containing the number of sampled haplotypes, of dimension (number of demes) x (number of loci)
+#'
+#' @return A matrix containing pairwise Fst
+#'
+#' @references
+#' Bhatia et al 2015 TODO
+#'
+#' @export
+
+fst_from_biallelic <- function(Y, N)
 {
+  # TODO: missing data
+
   if (!all(dim(Y)==dim(N)))
     stop("Dimension mismatch")
   if (any(Y<0) || any(N<0))
@@ -18,8 +34,25 @@ fst_from_biallelic_genotypes <- function(Y, N)
   fst
 }
 
-cov_from_biallelic_genotypes <- function(Y, N)
+#' Covariance from allele counts
+#'
+#' Calculates covariance from counts of the derived allele across biallelic makers,
+#' using normalized allele frequencies
+#'
+#' @param Y A matrix containing allele counts, of dimension (number of demes) x (number of loci)
+#' @param N A matrix containing the number of sampled haplotypes, of dimension (number of demes) x (number of loci)
+#'
+#' @details
+#' TODO formula
+#'
+#' @return A matrix containing pairwise covariance
+#'
+#' @export
+
+cov_from_biallelic <- function(Y, N)
 {
+  #TODO missing data
+
   if (!all(dim(Y)==dim(N)))
     stop("Dimension mismatch")
   if (any(Y<0) || any(N<0))
@@ -33,21 +66,50 @@ cov_from_biallelic_genotypes <- function(Y, N)
   Y %*% t(Y) / ncol(Y)
 }
 
+#' Distance matrix from covariance matrix
+#'
+#' Returns the squared-distance matrix associated with a given covariance matrix
+#'
+#' @param Cov A covariance matrix (does not need to be full-rank)
+#'
+#' @details
+#' TODO formula
+#'
+#' @return A distance matrix of the same dimension as the input
+#'
+#' @export
+
 dist_from_cov <- function(Cov)
 {
   ones <- matrix(1, nrow(Cov), 1)
   diag(Cov) %*% t(ones) + ones %*% t(diag(Cov)) - 2*Cov
 }
 
-dist_from_biallelic_genotypes <- function(Y, N)
+#' Distance from allele counts
+#'
+#' Calculates genetic distance from counts of the derived allele across biallelic makers,
+#' using normalized allele frequencies
+#'
+#' @param Y A matrix containing allele counts, of dimension (number of demes) x (number of loci)
+#' @param N A matrix containing the number of sampled haplotypes, of dimension (number of demes) x (number of loci)
+#'
+#' @details
+#' TODO formula
+#'
+#' @return A matrix containing pairwise distance
+#'
+#' @export
+
+dist_from_biallelic <- function(Y, N)
 {
-  dist_from_cov(cov_from_biallelic_genotypes(Y, N))
+  dist_from_cov(cov_from_biallelic(Y, N))
 }
 
+# TODO check and document
 wishart_simulate_distance <- function(seed, S, nu)
 {
   set.seed(seed)
-  dist_from_cov(rWishart(1, nu, S)[,,1])
+  dist_from_cov(solve(rWishart(1, nu, S)[,,1]))
 }
 
 wishart_simulate_experiment <- function(seed, N, P, K, nu, neval, timingOnly=FALSE)

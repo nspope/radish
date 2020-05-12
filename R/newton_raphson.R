@@ -237,13 +237,18 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
   # I don't understand why Armijo linesearch is needed
 }
 
-# Line search algorithm from Hager & Zhang ???
-# Adapted from LineSearch.jl
+#' Control settings for Hager-Zhang line search
+#'
+#' TODO after finalizing line search
+#'
+#' @export
 HagerZhangControl <- function(delta = 0.1, sigma = 0.9, alphamax = Inf, rho = 5.0, epsilon = 1e-6, gamma = 0.66, linesearchmax = 50, psi3 = 0.1, c = 1.0, verbose = FALSE)
   list(delta=delta, sigma=sigma, alphamax=alphamax, rho=rho, epsilon=epsilon, gamma=gamma, linesearchmax = linesearchmax, psi3 = psi3, c = c, verbose = verbose)
 
 setRefClass("HagerZhangStorage", fields=list(alphas="numeric", values="numeric", slopes="numeric"))
 
+# Line search algorithm from Hager & Zhang ???
+# Adapted from LineSearch.jl
 HagerZhang <- function (dphifn, phi_0, dphi_0, control = HagerZhangControl())
 {
   nextfloat <- function(x)

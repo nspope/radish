@@ -30,7 +30,7 @@
 #'  \item{hessian}{(if 'hessian') Hessian matrix of the negative loglikelihood with respect to phi}
 #'  \item{gradient_E}{(if 'partial') gradient with respect to the generalized inverse of the graph Laplacian}
 #'  \item{partial_E}{(if 'partial') Jacobian of 'gradient_E' with respect to phi}
-#'  \item{partial_S}{(if 'partial') Jacobian of 'gradient_E' with respect to phi}
+#'  \item{partial_S}{(if 'partial') Jacobian of 'gradient' with respect to S}
 #'  \item{jacobian_E}{(if 'partial') a function used for reverse algorithmic differentiation}
 #'  \item{jacobian_S}{(if 'partial') a function used for reverse algorithmic differentiation}
 #'
