@@ -21,9 +21,9 @@
 #' @return A list containing at a minimum:
 #'  \item{covariance}{rows/columns of the generalized inverse of the graph Laplacian for a subset of target vertices}
 #' Additionally, if 'objective == TRUE':
-#'  \item{objective}{the negative loglikelihood}
-#'  \item{fitted}{matrix of expected genetic distances among target vertices}
-#'  \item{boundary}{is the solution on the boundary (e.g. no genetic structure)?}
+#'  \item{objective}{(if 'objective') the negative loglikelihood}
+#'  \item{fitted}{((if 'objective') a matrix of expected genetic distances among target vertices}
+#'  \item{boundary}{(if 'objective') is the MLE on the boundary (e.g. no genetic structure)?}
 #'  \item{gradient}{(if 'gradient') gradient of negative loglikelihood with respect to phi}
 #'  \item{hessian}{(if 'hessian') Hessian matrix of the negative loglikelihood with respect to phi}
 #'  \item{gradient_E}{(if 'partial') gradient with respect to the generalized inverse of the graph Laplacian}

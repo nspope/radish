@@ -7,8 +7,8 @@
 mlpe(
   E,
   S,
-  nu,
   phi,
+  nu = NULL,
   gradient = TRUE,
   hessian = TRUE,
   partial = TRUE,
@@ -21,9 +21,9 @@ mlpe(
 
 \item{S}{A matrix of observed genetic distances}
 
-\item{nu}{Number of genetic markers (ignored)}
-
 \item{phi}{Nuisance parameters (see details)}
+
+\item{nu}{Number of genetic markers (ignored)}
 
 \item{gradient}{Compute gradient of negative loglikelihood wrt phi?}
 
@@ -38,10 +38,9 @@ mlpe(
 \value{
 A list containing at a minimum:
  \item{covariance}{rows/columns of the generalized inverse of the graph Laplacian for a subset of target vertices}
-Additionally, if 'objective == TRUE':
- \item{objective}{the negative loglikelihood}
- \item{fitted}{matrix of expected genetic distances among target vertices}
- \item{boundary}{is the solution on the boundary (e.g. no genetic structure)?}
+ \item{objective}{(if 'objective') the negative loglikelihood}
+ \item{fitted}{((if 'objective') a matrix of expected genetic distances among target vertices}
+ \item{boundary}{(if 'objective') is the MLE on the boundary (e.g. no genetic structure)?}
  \item{gradient}{(if 'gradient') gradient of negative loglikelihood with respect to phi}
  \item{hessian}{(if 'hessian') Hessian matrix of the negative loglikelihood with respect to phi}
  \item{gradient_E}{(if 'partial') gradient with respect to the generalized inverse of the graph Laplacian}
@@ -75,8 +74,8 @@ surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
 laplacian_inv <- radish_distance(radish::loglinear_conductance, surface, 
                                  theta = matrix(0, 1, 2), covariance = TRUE)$covariance[,,1]
 
-mlpe(laplacian_inv, melip.Fst, nu = NULL) #without 'phi': return MLE of phi
-mlpe(laplacian_inv, melip.Fst, nu = NULL, phi = c(0., 0.5, 0.1, 0.3))
+mlpe(laplacian_inv, melip.Fst) #without 'phi': return MLE of phi
+mlpe(laplacian_inv, melip.Fst, phi = c(0., 0.5, 0.1, 0.3))
 
 }
 \references{

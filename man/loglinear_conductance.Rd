@@ -8,10 +8,12 @@ loglinear_conductance(x, theta)
 }
 \description{
 A function of class "conductance_model" that represents a log-linear
-mapping from spatial covariates to conductance, such that
+mapping from spatial covariates to conductance
 }
 \details{
-C_i = exp(x_{i1} * theta_{1} + x_{i2} * theta_{2} + ...)
+The model is of the form
+
+  C_i = exp(x_{i1} * theta_{1} + x_{i2} * theta_{2} + ...)
 
 where "C_i" is the conductance of vertex "i", "x_ij" is the value of spatial
 covariate "j" at vertex "i", and "theta_j" is the parameter associated with

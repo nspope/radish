@@ -9,8 +9,8 @@ radish_grid(
   g,
   s,
   S,
-  nu = NULL,
   theta,
+  nu = NULL,
   nonnegative = TRUE,
   covariance = FALSE
 )
@@ -24,9 +24,9 @@ radish_grid(
 
 \item{S}{A matrix of observed genetic distances}
 
-\item{nu}{Number of genetic markers (potentially used by 'g')}
-
 \item{theta}{A matrix of dimension (grid size) x (number of parameters)}
+
+\item{nu}{Number of genetic markers (potentially used by 'g')}
 
 \item{nonnegative}{Force regression-like 'measurement_model' to have nonnegative slope?}
 

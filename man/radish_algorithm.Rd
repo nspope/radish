@@ -9,8 +9,8 @@ radish_algorithm(
   g,
   s,
   S,
-  nu,
   theta = rep(0, ncol(s$x)),
+  nu = NULL,
   objective = TRUE,
   gradient = TRUE,
   hessian = TRUE,
@@ -28,9 +28,9 @@ radish_algorithm(
 
 \item{S}{A matrix of observed genetic distances}
 
-\item{nu}{Number of genetic markers (potentially used by 'g')}
-
 \item{theta}{Parameters for conductance surface (e.g. inputs to 'f')}
+
+\item{nu}{Number of genetic markers (potentially used by 'g')}
 
 \item{objective}{Compute negative loglikelihood?}
 
