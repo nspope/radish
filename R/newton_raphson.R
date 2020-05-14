@@ -42,6 +42,7 @@ BFGS <- function(par, fn, lower = rep(-Inf, length(par)), upper = rep(Inf, lengt
     cat("BFGS with Hager-Zhang line search\n")
 
   convergence <- 0
+  par <- matrix(par, length(par), 1)
 
   for (i in 1:maxit)
   {
@@ -162,6 +163,7 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
     cat("Projected Newton-Raphson with Hager-Zhang line search\n")
 
   convergence <- 0
+  par <- matrix(par, length(par), 1)
 
   for (i in 1:maxit)
   {

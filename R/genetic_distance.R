@@ -1,7 +1,7 @@
 #' Fst from allele counts
 #'
 #' Calculates Fst using the estimator of Bhatia et al (2015)
-#' from counts of the derived allele across biallelic makers
+#' from counts of the derived allele across biallelic markers
 #'
 #' @param Y A matrix containing allele counts, of dimension (number of demes) x (number of loci)
 #' @param N A matrix containing the number of sampled haplotypes, of dimension (number of demes) x (number of loci)
@@ -36,7 +36,7 @@ fst_from_biallelic <- function(Y, N)
 
 #' Covariance from allele counts
 #'
-#' Calculates covariance from counts of the derived allele across biallelic makers,
+#' Calculates covariance from counts of the derived allele across biallelic markers,
 #' using normalized allele frequencies
 #'
 #' @param Y A matrix containing allele counts, of dimension (number of demes) x (number of loci)
@@ -87,7 +87,7 @@ dist_from_cov <- function(Cov)
 
 #' Distance from allele counts
 #'
-#' Calculates genetic distance from counts of the derived allele across biallelic makers,
+#' Calculates genetic distance from counts of the derived allele across biallelic markers,
 #' using normalized allele frequencies
 #'
 #' @param Y A matrix containing allele counts, of dimension (number of demes) x (number of loci)

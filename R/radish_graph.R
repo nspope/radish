@@ -27,10 +27,12 @@
 #'
 #' @export
 
-radish_conductance_surface <- function(covariates, coords, directions=c(4, 8), saveStack=TRUE)
+radish_conductance_surface <- function(covariates, coords, directions=4, saveStack=TRUE)
 {
+
   stopifnot(class(covariates) == "RasterStack"  )
   stopifnot(    class(coords) == "SpatialPoints")
+  stopifnot(directions %in% c(4, 8))
 
   # throw a warning if missing cells are not identical across layers
   spdat   <- as.matrix(raster::getValues(covariates))

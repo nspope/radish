@@ -64,12 +64,16 @@ leastsquares <- function(E, S, phi, nu = NULL, gradient = TRUE, hessian = TRUE, 
 
     if (!nonnegative || coef(fit)[2] > 0) 
     {
-      phi <- c("alpha" = coef(fit)[1], "beta" = coef(fit)[2], "tau" = -2 * log(sigma(fit)))
+      phi <- coef(fit)
+      names(phi) = NULL
+      phi <- c("alpha" = phi[1], "beta" = phi[2], "tau" = -2 * log(sigma(fit)))
     }
     else
     {
       fit <- nlme::gls(Sl ~ 1, method = "ML")
-      phi <- c("alpha" = coef(fit)[1], "beta" = 0, "tau" = -2 * log(sigma(fit)))
+      phi <- coef(fit)
+      names(phi) = NULL
+      phi <- c("alpha" = phi[1], "beta" = 0, "tau" = -2 * log(sigma(fit)))
     }
 
     return(list(phi = phi, 

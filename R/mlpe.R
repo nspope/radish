@@ -72,16 +72,20 @@ mlpe <- function(E, S, phi, nu = NULL, gradient = TRUE, hessian = TRUE, partial 
 
     if (!nonnegative || coef(fit)[2] > 0) 
     {
+      phi <- coef(fit)
+      names(phi) = NULL
       rho <- fit$modelStruct$corStruct[[1]] #already unconstrained
-      phi <- c("alpha" = coef(fit)[1], "beta" = coef(fit)[2], "tau" = -2 * log(sigma(fit)), 
+      phi <- c("alpha" = phi[1], "beta" = phi[2], "tau" = -2 * log(sigma(fit)), 
                "rho" = rho)
     }
     else
     {
       fit  <- nlme::gls(Sl ~ 1, method = "ML", correlation = corMLPE::corMLPE(form = ~Ind1 + Ind2), 
                         data = data.frame(Sl, Ind1 = Ind[,1], Ind2 = Ind[,2]))
+      phi <- coef(fit)
+      names(phi) = NULL
       rho <- fit$modelStruct$corStruct[[1]] #already unconstrained
-      phi <- c("alpha" = coef(fit)[1], "beta" = 0, "tau" = -2 * log(sigma(fit)), 
+      phi <- c("alpha" = phi[1], "beta" = 0, "tau" = -2 * log(sigma(fit)), 
                "rho" = rho)
     }
 

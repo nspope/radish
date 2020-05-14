@@ -75,7 +75,7 @@ radish_algorithm <- function(f, g, s, S, theta = rep(0, ncol(s$x)), nu = NULL, o
   # Eq. ??? in radish paper
   Qd   <- Matrix::Diagonal(N, x = -Matrix::rowSums(Q))
   In   <- Matrix::Diagonal(N)[-N,]
-  Qn   <- forceSymmetric(In %*% (Q + Qd) %*% Matrix::t(In))
+  Qn   <- Matrix::forceSymmetric(In %*% (Q + Qd) %*% Matrix::t(In))
   ones <- matrix(1, N, 1)
   v    <- sqrt(ones / N)
   Z    <- Matrix::Diagonal(N)[,s$demes]
