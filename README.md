@@ -18,7 +18,7 @@ library(raster)
 
 data(melip)
 
-# currently, it's crucial to scale spatial covariates
+# scaling spatial covariates helps avoid numeric overflow
 scale_to_0_1 <- function(x) (x - min(x, na.rm = TRUE))/(max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
 values(melip.altitude) <- scale_to_0_1(values(melip.altitude))
 values(melip.forestcover) <- scale_to_0_1(values(melip.forestcover))
@@ -40,6 +40,10 @@ summary(fit_mlpe)
 
 plot(fitted(fit_mlpe, "distance"), melip.Fst, pch = 19,
      xlab = "Optimized resistance distance", ylab = "Fst")
+
+mle <- fit_mlpe$theta
+fitted_conductance <- exp(surface$stack[["altitude"]]*mle[1] + surface$stack[["forestcover"]]*mle[2])
+plot(fitted_conductance, main = "Fitted conductance surface")
 
 # visualise likelihood surface across grid (takes awhile)
 theta <- as.matrix(expand.grid(x=seq(-6,6,length.out=21), y=seq(-6,6,length.out=21)))
