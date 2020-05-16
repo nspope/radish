@@ -14,6 +14,7 @@ radish(
   leverage = TRUE,
   nonnegative = TRUE,
   validate = FALSE,
+  optimizer = c("newton", "bfgs"),
   control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-06, ftol = 1e-06)
 )
 }
@@ -35,6 +36,8 @@ radish(
 \item{nonnegative}{Force regression-like 'measurement_model' to have nonnegative slope?}
 
 \item{validate}{Numerical validation via 'numDeriv' (very slow, use for debugging small examples)}
+
+\item{optimizer}{The optimization algorithm to use: "newton" uses the exact Hessian, so computational cost grows linearly with the number of parameters; while "bfgs" uses an approximation with much reduced cost (but slower overall convergence)}
 
 \item{control}{A list containing options for the optimization routine (see ?NewtonRaphsonControl for list)}
 }

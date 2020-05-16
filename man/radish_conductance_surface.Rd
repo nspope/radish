@@ -7,7 +7,7 @@
 radish_conductance_surface(
   covariates,
   coords,
-  directions = c(4, 8),
+  directions = 4,
   saveStack = TRUE
 )
 }

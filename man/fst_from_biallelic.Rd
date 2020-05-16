@@ -16,7 +16,7 @@ A matrix containing pairwise Fst
 }
 \description{
 Calculates Fst using the estimator of Bhatia et al (2015)
-from counts of the derived allele across biallelic makers
+from counts of the derived allele across biallelic markers
 }
 \references{
 Bhatia et al 2015 TODO

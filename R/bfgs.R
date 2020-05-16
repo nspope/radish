@@ -1,32 +1,9 @@
-#' Controls for Newton-like optimizer
-#'
-#' Control settings for Newton and quasi-Newton algorithms
-#'
-#' @param maxit Maximum number of Newton steps
-#' @param ctol Convergence tolerance in the gradient (max(abs(grad)) < ctol)
-#' @param ftol Convergence tolerance in the objective (f - fold < ftol)
-#' @param etol Maximum spectral gap for a eigenvalue to be considered too close to singular
-#' @param verbose Print progress to stdout
-#' @param eps For box-constrained optimization, how close to a boundary can be considered "on the boundary"
-#' @param del For quasi-Newton methods, a typical step size used to initialize the approximate Hessian
-#' @param ls.control Control settings for the line search
-#'
-#' @export
-NewtonRaphsonControl <- function(maxit = 100, 
-                                 ctol = sqrt(.Machine$double.eps), 
-                                 ftol = sqrt(.Machine$double.eps), 
-                                 etol = 10*.Machine$double.eps, 
-                                 verbose = FALSE, 
-                                 eps = 1e-8, 
-                                 del = 1,
-                                 ls.control = HagerZhangControl())
-  list(maxit = maxit, ctol = ctol, etol = etol, 
-       ftol = ftol, verbose = verbose, eps = eps, 
-       del = del, ls.control = ls.control)
+#for now focus on stable BFGS
+#setRefClass("LBFGSstorage", fields = list(ss = "matrix", yy = "matrix", m = "integer", k = "integer"))
 
-BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper = rep(Inf, length(par)), control = NewtonRaphsonControl())
+BoxConstrainedBFGS <- function(par, fn, lower = rep(-Inf, length(par)), upper = rep(Inf, length(par)), control = NewtonRaphsonControl())
 {
-  BoxConstrainedNewtonNaN <- function()
+  BFGSNaN <- function()
   {
     list(objective = NaN,
          gradient  = matrix(NaN, length(par), 1),
@@ -63,22 +40,22 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
   etol <- etol * length(par)
 
   if (verbose)
-    cat("Projected Newton-Raphson with Hager-Zhang line search\n")
+    cat("BFGS with Hager-Zhang line search\n")
 
   convergence <- 0
+  initialized <- 0
   par <- matrix(par, length(par), 1)
 
   for (i in 1:maxit)
   {
-    fit   <- fn(par, gradient = TRUE, hessian = TRUE)
+    fit   <- fn(par, gradient = TRUE, hessian = FALSE)
     delta <- if (i > 1) abs(oldfit$objective - fit$objective) else 0
 
     if (verbose)
       cat(paste0("[", i, "]"), 
           "f(x) =", prettify(-fit$objective),
-          "  |f(x)-fold(x)| =", prettify(delta),
+          "  |f(x) - fold(x)| =", prettify(delta),
           "  max|f'(x)| =", prettify(max(abs(fit$gradient))),
-          "  |f''(x)| =", prettify(-det(fit$hessian)),
           "\n")
 
     if (max(abs(fit$gradient)) < ctol || (i > 1 && delta < ftol))
@@ -86,13 +63,39 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
 
     gradient     <- fit$gradient
     gradient_box <- zero_bounded_variables(gradient, par, lower, upper, eps)
-    ehess        <- eigen(fit$hessian)
-    ehess$values <- abs(ehess$values)
-    ehess$values <- ifelse(ehess$values < max(abs(fit$hessian)) * etol, 1, ehess$values)
-    ihess        <- ehess$vectors %*% solve(diag(ehess$values, nrow=length(par))) %*% t(ehess$vectors)
-    desc         <- gap_step_bounded_variables(-ihess %*% gradient_box, par, gradient, lower, upper, eps)
-    phi0         <- fit$objective
-    dphi0        <- c(t(desc) %*% gradient_box)
+
+    if(initialized > 0) 
+    { #BFGS update from Nodecal and Wright Ch 6
+      #with damping from Nodecal and Wright Ch 18 to ensure matrix is sufficiently positive definite
+      yy    <- gradient - oldfit$gradient
+      ss    <- alpha*desc
+      irho  <- c(t(yy) %*% ss) 
+      if(initialized == 1)
+      { #rescale initial Hessian as per Nodecal and Wright 6.20
+        initialized <- 2
+        ihess       <- diag(nrow(ihess)) * irho/c(t(yy) %*% yy)
+        hess        <- diag(nrow(hess)) * c(t(yy) %*% yy)/irho
+      } 
+      sBs   <- c(t(ss) %*% hess %*% ss)
+      theta <- if (irho >= 0.2 * sBs) 1.0 else (0.8 * sBs)/(sBs - irho)
+      if (verbose && theta < 1.0)
+        cat("... damped BFGS update\n")
+      rr    <- theta * yy + (1 - theta) * hess %*% ss
+      rho   <- 1./c(t(rr) %*% ss) 
+      upd   <- diag(nrow(ihess)) - rho * ss %*% t(rr)
+      ihess <- upd %*% ihess %*% t(upd) + rho * ss %*% t(ss)
+      hess  <- hess - hess %*% ss %*% t(ss) %*% hess / sBs + rho * rr %*% t(rr)
+    } 
+    else
+    { #initial (diagonal) Hessian approximation
+      initialized <- 1 
+      ihess       <- del/sqrt(sum(gradient * gradient)) * diag(length(par))
+      hess        <- sqrt(sum(gradient * gradient))/del * diag(length(par))
+    }
+
+    desc  <- gap_step_bounded_variables(-ihess %*% gradient_box, par, gradient, lower, upper, eps)
+    phi0  <- fit$objective
+    dphi0 <- c(t(desc) %*% gradient_box)
 
     dphi_fn <- function(alpha) 
     {
@@ -101,15 +104,16 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
         grb <- zero_bounded_variables(phi$gradient, par + alpha*desc, lower, upper, eps)
         list(objective = phi$objective, gradient = c(t(desc) %*% grb))
       }, error = function(e) {
-        BoxConstrainedNewtonNaN()
+        # TODO: could "restart" hessian approximation here?
+        # Not sure if this is necessary with damping
+        BFGSNaN()
       })
     }
 
-    #alpha <- HagerZhang(dphi_fn, phi0, dphi0, control = ls.control)
     alpha <- tryCatch({
       HagerZhang(dphi_fn, phi0, dphi0, control = ls.control)
     }, error = function(err) {
-      cat("... switched to backtracking\n")
+      cat("Switched to backtracking\n")
       Backtracking(dphi_fn, phi0, dphi0)
     })
     par <- project(par + alpha*desc, lower, upper)
@@ -126,7 +130,7 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
 
   if (i == maxit)
   {
-    warning("`maxit` reached for Newton steps")
+    warning("`maxit` reached for quasi-Newton steps")
     convergence = 1
   } 
 
@@ -135,7 +139,7 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
        hessian = fit$hessian,
        value = fit$objective,
        fit = fit,
-       iters = i,
        boundary = boundary_fit,
        convergence = convergence)
 }
+

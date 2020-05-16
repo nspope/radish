@@ -15,7 +15,7 @@ cov_from_biallelic(Y, N)
 A matrix containing pairwise covariance
 }
 \description{
-Calculates covariance from counts of the derived allele across biallelic makers,
+Calculates covariance from counts of the derived allele across biallelic markers,
 using normalized allele frequencies
 }
 \details{

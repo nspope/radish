@@ -2,7 +2,7 @@
 % Please edit documentation in R/newton_raphson.R
 \name{NewtonRaphsonControl}
 \alias{NewtonRaphsonControl}
-\title{Control settings for Newton-Raphson optimizer}
+\title{Controls for Newton-like optimizer}
 \usage{
 NewtonRaphsonControl(
   maxit = 100,
@@ -11,9 +11,27 @@ NewtonRaphsonControl(
   etol = 10 * .Machine$double.eps,
   verbose = FALSE,
   eps = 1e-08,
+  del = 1,
   ls.control = HagerZhangControl()
 )
 }
+\arguments{
+\item{maxit}{Maximum number of Newton steps}
+
+\item{ctol}{Convergence tolerance in the gradient (max(abs(grad)) < ctol)}
+
+\item{ftol}{Convergence tolerance in the objective (f - fold < ftol)}
+
+\item{etol}{Maximum spectral gap for a eigenvalue to be considered too close to singular}
+
+\item{verbose}{Print progress to stdout}
+
+\item{eps}{For box-constrained optimization, how close to a boundary can be considered "on the boundary"}
+
+\item{del}{For quasi-Newton methods, a typical step size used to initialize the approximate Hessian}
+
+\item{ls.control}{Control settings for the line search}
+}
 \description{
-TODO after finalizing line search
+Control settings for Newton and quasi-Newton algorithms
 }

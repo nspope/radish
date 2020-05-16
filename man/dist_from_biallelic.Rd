@@ -15,7 +15,7 @@ dist_from_biallelic(Y, N)
 A matrix containing pairwise distance
 }
 \description{
-Calculates genetic distance from counts of the derived allele across biallelic makers,
+Calculates genetic distance from counts of the derived allele across biallelic markers,
 using normalized allele frequencies
 }
 \details{

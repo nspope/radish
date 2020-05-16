@@ -16,6 +16,7 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' @param leverage Compute influence measures and leverage?
 #' @param nonnegative Force regression-like 'measurement_model' to have nonnegative slope?
 #' @param validate Numerical validation via 'numDeriv' (very slow, use for debugging small examples)
+#' @param optimizer The optimization algorithm to use: "newton" uses the exact Hessian, so computational cost grows linearly with the number of parameters; while "bfgs" uses an approximation with much reduced cost (but slower overall convergence)
 #' @param control A list containing options for the optimization routine (see ?NewtonRaphsonControl for list)
 #'
 #' @return An object of class 'radish'
@@ -33,20 +34,29 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #'
 #' @export
 
-radish <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = TRUE, nonnegative = TRUE, validate = FALSE, control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-6, ftol = 1e-6))
+radish <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = TRUE, nonnegative = TRUE, validate = FALSE, optimizer = c("newton", "bfgs"), control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-6, ftol = 1e-6))
 {
-  fcalls  <- new("FunctionCall", count = 0L)
-  problem <- BoxConstrainedNewton(theta, 
-                           function(par, gradient, hessian) 
-                           {
-                             fcalls$count <- fcalls$count + 1L
-                             radish_algorithm(f = f, g = g, s = s, S = S, nu = nu, theta = c(par), 
-                                              gradient = gradient, 
-                                              hessian = hessian, 
-                                              partial = FALSE, 
-                                              nonnegative = nonnegative)
-                           },
-                           control = control)
+  optimizer <- match.arg(optimizer)
+  fcalls    <- new("FunctionCall", count = 0L)
+  optfn     <- function(par, gradient, hessian)
+  {
+    fcalls$count <- fcalls$count + 1L
+    radish_algorithm(f = f, g = g, s = s, S = S, nu = nu, theta = c(par), 
+                     gradient = gradient, 
+                     hessian = hessian, 
+                     partial = FALSE, 
+                     nonnegative = nonnegative)
+  }
+
+  if (optimizer == "newton")
+    problem <- BoxConstrainedNewton(theta, 
+                                    optfn,
+                                    control = control)
+  else if (optimizer == "bfgs")
+    problem <- BoxConstrainedBFGS(theta, 
+                                  optfn,
+                                  control = control)
+
   theta <- problem$par
   fit   <- radish_algorithm(f = f, g = g, s = s, S = S, nu = nu, theta = theta,
                             gradient = TRUE, hessian = TRUE, partial = leverage,
@@ -242,22 +252,22 @@ simulate.radish <- function(x, nsim = 1, method = c("permutation", "parametric")
 
 # at some point get a non-finicky version of BFGS
 # needs debugging
-radish_optimize2 <- function(f, g, s, S, theta = rep(0, ncol(s$x)), leverage = TRUE, nonnegative = TRUE, validate = FALSE, control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-6, ftol = 1e-6))
+radish2 <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = TRUE, nonnegative = TRUE, validate = FALSE, control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-6, ftol = 1e-6))
 {
-  .fcall <<- 0 #debug
-  problem <- BFGS(theta, 
-                           function(par, gradient, hessian) 
-                           {
-                             .fcall <<- .fcall + 1 #debug
-                               radish_algorithm(f = f, g = g, s = s, S = S, theta = c(par), 
-                                                gradient = gradient, 
-                                                hessian = hessian, 
-                                                partial = FALSE, 
-                                                nonnegative = nonnegative)
-                           },
-                           control = control)
+  fcalls  <- new("FunctionCall", count = 0L)
+  problem <- BoxConstrainedBFGS(theta, 
+                                function(par, gradient, hessian) 
+                                {
+                                  fcalls$count <- fcalls$count + 1L
+                                  radish_algorithm(f = f, g = g, s = s, S = S, nu = nu, theta = c(par), 
+                                                   gradient = gradient, 
+                                                   hessian = hessian, 
+                                                   partial = FALSE, 
+                                                   nonnegative = nonnegative)
+                                },
+                                control = control)
   theta <- problem$par
-  fit   <- radish_algorithm(f = f, g = g, s = s, S = S, theta = theta,
+  fit   <- radish_algorithm(f = f, g = g, s = s, S = S, nu = nu, theta = theta,
                             gradient = TRUE, hessian = TRUE, partial = leverage,
                             nonnegative = nonnegative)
 
@@ -306,16 +316,39 @@ radish_optimize2 <- function(f, g, s, S, theta = rep(0, ncol(s$x)), leverage = T
 
   if (fit$boundary)
     warning("Optimum for subproblem is on boundary (e.g. no spatial genetic structure): cannot optimize theta. Try different starting values.")
+  else
+  {
+    ztable <- matrix(0, length(theta), 4)
+    colnames(ztable)      <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
+    rownames(ztable)      <- s$covariates
+    ztable[,"Estimate"]   <- theta
+    ztable[,"Std. Error"] <- diag(solve(fit$hessian))
+    ztable[,"z value"]    <- ztable[,"Estimate"]/ztable[,"Std. Error"]
+    ztable[,"Pr(>|z|)"]   <- pmin(2*(1 - pnorm(abs(ztable[,"z value"]))), 1)
 
-  list(fcall          = .fcall, #DEBUG
-       fit            = fit,
-       theta          = theta,
-       phi            = fit$phi,
-       loglikelihood  = fit$objective,
-       gradient       = fit$gradient,
-       hessian        = fit$hessian,
-       leverage_S     = if(!leverage) NULL else leverage_S,
-       leverage_X     = if(!leverage) NULL else leverage_X,
-       num_leverage_S = if(!validate) NULL else num_leverage_S,
-       num_leverage_X = if(!validate) NULL else num_leverage_X)
+    vcor <- cov2cor(solve(fit$hessian))
+    rownames(vcor) <- colnames(vcor) <- s$covariates
+  }
+
+  out <- list(call           = match.call(),
+              response       = S,
+              fcalls         = fcalls$count,
+              iters          = problem$iters,
+              boundary       = fit$boundary,
+              fit            = fit,
+              theta          = theta,
+              phi            = fit$phi[,1],
+              ztable         = ztable,
+              vcor           = as.dist(vcor),
+              aic            = 2*fit$objective + 2*length(theta) + 2*length(fit$phi),
+              df             = (!fit$boundary) * length(theta) + length(fit$phi),
+              loglikelihood  = -fit$objective,
+              gradient       = -fit$gradient,
+              hessian        = -fit$hessian,
+              leverage_S     = if(!leverage) NULL else leverage_S,
+              leverage_X     = if(!leverage) NULL else leverage_X,
+              num_leverage_S = if(!validate) NULL else num_leverage_S,
+              num_leverage_X = if(!validate) NULL else num_leverage_X)
+  class(out) <- "radish"
+  out
 }
