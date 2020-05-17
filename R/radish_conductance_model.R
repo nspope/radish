@@ -48,7 +48,7 @@ class(loglinear_conductance) <- c("radish_conductance_model")
 #'
 #' @export
 
-identity_conductance <- function(x, theta)
+linear_conductance <- function(x, theta)
 {
   conductance        <- as.vector(x %*% theta)
 
@@ -68,4 +68,4 @@ identity_conductance <- function(x, theta)
        d2f__dtheta_dtheta = d2f__dtheta_dtheta, 
        d2f__dtheta_dx     = d2f__dtheta_dx)
 }
-class(identity_conductance) <- c("radish_conductance_model")
+class(linear_conductance) <- c("radish_conductance_model")

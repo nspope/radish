@@ -221,7 +221,7 @@ HagerZhang <- function (dphifn, phi_0, dphi_0, control = HagerZhangControl())
       st$values = c(st$values, phi_c)
       st$slopes = c(st$slopes, dphi_c)
 
-      upd = update(dphifn, st, iA, iB, length(st$alphas), phi_lim, verbose) 
+      upd = hzupdate(dphifn, st, iA, iB, length(st$alphas), phi_lim, verbose) 
       ia = upd[[1]]
       ib = upd[[2]]
     }
@@ -282,7 +282,7 @@ secant2 <- function(dphifn, st, ia, ib, phi_lim, delta, sigma, verbose)
       return(list(TRUE, ic, ic))
     }
 
-    upd = update(dphifn, st, ia, ib, ic, phi_lim, verbose) 
+    upd = hzupdate(dphifn, st, ia, ib, ic, phi_lim, verbose) 
     iA = upd[[1]]
     iB = upd[[2]]
     if (verbose)
@@ -321,7 +321,7 @@ secant2 <- function(dphifn, st, ia, ib, phi_lim, delta, sigma, verbose)
                 cat("secant2: second c satisfied Wolfe conditions\n")
             return (list(TRUE, ic, ic))
         }
-        upd = update(dphifn, st, iA, iB, ic, phi_lim, verbose) 
+        upd = hzupdate(dphifn, st, iA, iB, ic, phi_lim, verbose) 
         iA = upd[[1]]
         iB = upd[[2]]
     }
@@ -334,8 +334,8 @@ secant2 <- function(dphifn, st, ia, ib, phi_lim, delta, sigma, verbose)
 # Given a third point, pick the best two that retain the bracket
 # around the minimum (as defined by HZ, eq. 29)
 # b will be the upper bound, and a the lower bound
-#update <- function(dphifn, alphas, values, slopes, ia, ib, ic, phi_lim, verbose)
-update <- function(dphifn, st, ia, ib, ic, phi_lim, verbose)
+#hzupdate <- function(dphifn, alphas, values, slopes, ia, ib, ic, phi_lim, verbose)
+hzupdate <- function(dphifn, st, ia, ib, ic, phi_lim, verbose)
 {
     a = st$alphas[ia]
     b = st$alphas[ib]

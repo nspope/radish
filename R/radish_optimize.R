@@ -27,10 +27,10 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' data(melip)
 #' 
 #' covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
-#' surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
+#' surface <- conductance_surface(~altitude * forestcover, covariates, melip.coords, directions = 8)
 #' 
-#' fit_nnls <- radish(radish::loglinear_conductance, radish::leastsquares, surface, melip.Fst)
-#' summary(fit_nnls)
+#' fit_mlpe <- radish(radish::loglinear_conductance, radish::mlpe, surface, melip.Fst)
+#' summary(fit_mlpe)
 #'
 #' @export
 
@@ -113,7 +113,7 @@ radish <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = 
     colnames(ztable)      <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
     rownames(ztable)      <- s$covariates
     ztable[,"Estimate"]   <- theta
-    ztable[,"Std. Error"] <- diag(solve(fit$hessian))
+    ztable[,"Std. Error"] <- sqrt(diag(solve(fit$hessian)))
     ztable[,"z value"]    <- ztable[,"Estimate"]/ztable[,"Std. Error"]
     ztable[,"Pr(>|z|)"]   <- pmin(2*(1 - pnorm(abs(ztable[,"z value"]))), 1)
 
@@ -122,20 +122,22 @@ radish <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = 
   }
 
   out <- list(call           = match.call(),
-              response       = S,
+              vertices       = nrow(s$x),
               fcalls         = fcalls$count,
               iters          = problem$iters,
               boundary       = fit$boundary,
               fit            = fit,
-              theta          = theta,
-              phi            = fit$phi[,1],
-              ztable         = ztable,
-              vcor           = as.dist(vcor),
-              aic            = 2*fit$objective + 2*length(theta) + 2*length(fit$phi),
-              df             = (!fit$boundary) * length(theta) + length(fit$phi),
+              f              = f,
+              response       = S,
               loglikelihood  = -fit$objective,
-              gradient       = -fit$gradient,
-              hessian        = -fit$hessian,
+              df             = (!fit$boundary) * length(theta) + length(fit$phi),
+              aic            = 2*fit$objective + 2*(!fit$boundary)*length(theta) + 2*length(fit$phi),
+              phi            = fit$phi[,1],
+              theta          = if(fit$boundary) NULL else theta,
+              gradient       = if(fit$boundary) NULL else -fit$gradient,
+              hessian        = if(fit$boundary) NULL else -fit$hessian,
+              ztable         = if(fit$boundary) NULL else ztable,
+              vcor           = if(fit$boundary) NULL else as.dist(vcor),
               leverage_S     = if(!leverage) NULL else leverage_S,
               leverage_X     = if(!leverage) NULL else leverage_X,
               num_leverage_S = if(!validate) NULL else num_leverage_S,
@@ -148,7 +150,7 @@ print.radish <- function(x, digits = max(3L, getOption("digits") - 3L), ...)
 {
   cat("Conductance surface estimated by maximum likelihood\n")
   cat("Call:   ", paste(deparse(x$call), sep = "\n", collapse = "\n"), "\n\n", sep = "")
-  if (nrow(x$ztable) && !x$boundary)
+  if (!x$boundary && nrow(x$ztable))
   {
     cat("Coefficients:\n")
     print.default(format(x$ztable[,"Estimate"], digits = digits), print.gap = 2L, quote = FALSE)
@@ -167,27 +169,29 @@ print.radish <- function(x, digits = max(3L, getOption("digits") - 3L), ...)
 
 summary.radish <- function(x, ...)
 {
-  out <- list(boundary = x$boundary,
-              ztable   = x$ztable,
-              vcor     = x$vcor,
+  out <- list(boundary      = x$boundary,
+              phi           = x$phi,
+              ztable        = if (x$boundary) NULL else x$ztable,
+              gradnorm      = if (x$boundary) NULL else sqrt(c(x$gradient %*% x$gradient)),
+              vcor          = if (x$boundary) NULL else x$vcor,
               loglikelihood = x$loglikelihood,
-              aic      = x$aic,
-              fcalls   = x$fcalls,
-              iters    = x$iters,
-              df       = x$df,
-              gradnorm = sqrt(c(x$gradient %*% x$gradient)),
-              call     = x$call,
-              phi      = x$phi)
+              df            = x$df,
+              aic           = x$aic,
+              fcalls        = x$fcalls,
+              iters         = x$iters,
+              call          = x$call,
+              dim           = c("vertices" = x$vertices, "focal" = nrow(x$response))
+              )
   class(out) <- "summary.radish"
   out
 }
 
 print.summary.radish <- function(x, digits = max(3L, getOption("digits") - 3L), signif.stars = getOption("show.signif.stars"), ...)
 {
-  cat("Conductance surface estimated by maximum likelihood\n")
+  cat("Conductance surface with", x$dim["vertices"], "vertices", 
+      paste0("(", x$dim["focal"]), "focal) estimated by maximum likelihood\n")
   cat("Call:   ", paste(deparse(x$call), sep = "\n", collapse = "\n"), "\n\n", sep = "")
-  cat("Loglikelihood:", x$loglikelihood, "   Df:", x$df,  "\n")
-  cat("AIC:", x$aic, "\n\n")
+  cat("Loglikelihood:", x$loglikelihood, paste0("(", x$df), "degrees freedom)\nAIC:", x$aic, "\n\n")
   cat("Number of function calls:", x$fcalls, "\n")
   cat("Number of Newton-Raphson steps:", x$iters, "\n")
   cat("Norm of gradient at MLE:", x$gradnorm, "\n\n")
@@ -197,7 +201,7 @@ print.summary.radish <- function(x, digits = max(3L, getOption("digits") - 3L), 
     print.default(format(x$phi, digits = digits), print.gap = 2L, quote = FALSE)
     cat("\n")
   }
-  if (nrow(x$ztable) && !x$boundary)
+  if (!x$boundary && nrow(x$ztable))
   {
     cat("Coefficients:\n")
     printCoefmat(x$ztable, digits = digits, signif.stars = signif.stars, na.print = "NA", ...)
