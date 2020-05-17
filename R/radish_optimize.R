@@ -113,7 +113,7 @@ radish <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = 
     colnames(ztable)      <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
     rownames(ztable)      <- s$covariates
     ztable[,"Estimate"]   <- theta
-    ztable[,"Std. Error"] <- diag(solve(fit$hessian))
+    ztable[,"Std. Error"] <- sqrt(diag(solve(fit$hessian)))
     ztable[,"z value"]    <- ztable[,"Estimate"]/ztable[,"Std. Error"]
     ztable[,"Pr(>|z|)"]   <- pmin(2*(1 - pnorm(abs(ztable[,"z value"]))), 1)
 
