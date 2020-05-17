@@ -101,12 +101,13 @@ conductance_surface <- function(formula, covariates, coords, directions=4, saveS
   if (any(is_factor))
   {
     factors <- names(covariates)[is_factor]
-    warning(paste("Treating covariates", factors, "as factors", collapse = " "))
+    warning("Treating covariates \"", paste(factors, collapse = "\" \""), "\" as factors")
     for (i in factors)
     {
       levels    <- raster::levels(covariates[[i]])[[1]]
-      levels    <- if(is.null(lev$VALUE)) levels$ID else levels$VALUE
-      spdat[,i] <- factor(levels[spdat[,i]])
+      ids       <- levels$ID
+      levels    <- if(is.null(levels$VALUE)) ids else levels$VALUE
+      spdat[,i] <- factor(levels[match(spdat[,i], ids)])
     }
   }
 

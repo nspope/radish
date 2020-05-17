@@ -21,14 +21,11 @@ library(raster)
 data(melip)
 
 # scaling spatial covariates helps avoid numeric overflow
-scale_to_0_1 <- function(x) (x - min(x, na.rm = TRUE))/(max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
-values(melip.altitude) <- scale_to_0_1(values(melip.altitude))
-values(melip.forestcover) <- scale_to_0_1(values(melip.forestcover))
-
-covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
+covariates <- raster::stack(list(altitude = raster::scale(melip.altitude), 
+                                 forestcover = raster::scale(melip.forestcover)))
 
 plot(covariates[["altitude"]])
-points(melip.coords)
+points(melip.coords, pch = 19)
 
 surface <- conductance_surface(~forestcover + altitude, covariates, melip.coords, directions = 8)
 
