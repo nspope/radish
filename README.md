@@ -40,8 +40,11 @@ summary(fit_mlpe)
 plot(fitted(fit_mlpe, "distance"), melip.Fst, pch = 19,
      xlab = "Optimized resistance distance", ylab = "Fst")
 
-fitted_conductance <- conductance(surface, fit_mlpe)
-plot(fitted_conductance, main = "Fitted conductance surface\n(forestcover + altitude)")
+# visualise estimated conductance surface and asymptotic confidence intervals
+fitted_conductance <- conductance(surface, fit_mlpe, quantile = 0.95)
+plot(fitted_conductance[["est"]], main = "Fitted conductance surface\n(forestcover + altitude)")
+plot(fitted_conductance[["lower95"]], main = "Fitted conductance surface\n(lower 95% CI)")
+plot(fitted_conductance[["upper95"]], main = "Fitted conductance surface\n(upper 95% CI)")
 
 # visualise likelihood surface across grid for reduced model (takes awhile)
 theta <- as.matrix(expand.grid(forestcover=seq(-1,1,length.out=21), altitude=seq(-1,1,length.out=21)))

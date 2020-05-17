@@ -117,7 +117,8 @@ radish <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = 
     ztable[,"z value"]    <- ztable[,"Estimate"]/ztable[,"Std. Error"]
     ztable[,"Pr(>|z|)"]   <- pmin(2*(1 - pnorm(abs(ztable[,"z value"]))), 1)
 
-    vcor <- cov2cor(solve(fit$hessian))
+    vcov <- solve(fit$hessian) #TODO: check for singularity here and throw warning
+    vcor <- cov2cor(vcov)
     rownames(vcor) <- colnames(vcor) <- s$covariates
   }
 
@@ -137,6 +138,7 @@ radish <- function(f, g, s, S, nu = NULL, theta = rep(0, ncol(s$x)), leverage = 
               gradient       = if(fit$boundary) NULL else -fit$gradient,
               hessian        = if(fit$boundary) NULL else -fit$hessian,
               ztable         = if(fit$boundary) NULL else ztable,
+              vcov           = if(fit$boundary) NULL else vcov,
               vcor           = if(fit$boundary) NULL else as.dist(vcor),
               leverage_S     = if(!leverage) NULL else leverage_S,
               leverage_X     = if(!leverage) NULL else leverage_X,

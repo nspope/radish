@@ -165,26 +165,36 @@ conductance <- function(x, ...)
   UseMethod("conductance")
 }
 
-conductance.radish_graph <- function(object, fit, ci = 0.95)
+conductance.radish_graph <- function(object, fit, quantile = 0.95)
 {
   stopifnot(class(fit) == "radish")
   stopifnot(!fit$boundary)
 
+  conductance <- fit$f(object$x, fit$theta)
+  ci <- conductance$confint(x = object$x, theta = fit$theta, vcov = fit$vcov, 
+                            quantile = quantile, scale = "conductance")
+  colnames(ci) <- paste0(c("lower", "upper"), round(100*quantile, 1))
+
   if (!is.null(object$stack))
   {
     template <- object$stack[[1]]
-    missing  <- is.na(values(template))
-    values(template)[!missing] <- 1.
-    # TODO: confidence intervals
-    #lower <- upper <- est <- template
-    est <- template
-    values(est)[!missing] <- fit$f(object$x, fit$theta)$conductance
-    return(est)
+    missing  <- is.na(raster::values(template))
+    raster::values(template)[!missing] <- 1.
+    lower <- upper <- est <- template
+    raster::values(est)[!missing] <- conductance$conductance
+    raster::values(lower)[!missing] <- ci[,1]
+    raster::values(upper)[!missing] <- ci[,2]
+    out <- list()
+    out[["est"]] <- est
+    out[[colnames(ci)[1]]] <- lower
+    out[[colnames(ci)[2]]] <- upper
+    raster::stack(out)
   }
   else
   {
     warning("No raster associated with graph, returning conductance as vector")
-    return(fit$f(object$x, fit$theta)$conductance)
+    out <- cbind("est" = conductance$conductance, ci)
+    out
   }
 }
 
