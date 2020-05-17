@@ -44,7 +44,7 @@ fitted_conductance <- conductance(surface, fit_mlpe)
 plot(fitted_conductance, main = "Fitted conductance surface\n(forestcover + altitude)")
 
 # visualise likelihood surface across grid for reduced model (takes awhile)
-theta <- as.matrix(expand.grid(forestcover=seq(-6,6,length.out=21), altitude=seq(-6,6,length.out=21)))
+theta <- as.matrix(expand.grid(forestcover=seq(-1,1,length.out=21), altitude=seq(-1,1,length.out=21)))
 grid <- radish_grid(radish::loglinear_conductance, radish::mlpe, surface, melip.Fst, theta)
 
 library(ggplot2)
