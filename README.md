@@ -39,6 +39,7 @@ fit_mlpe <- radish(melip.Fst ~ forestcover + altitude, surface,
                    radish::loglinear_conductance, radish::mlpe)
 summary(fit_mlpe)
 
+# visualisation:
 plot(fitted(fit_mlpe, "distance"), melip.Fst, pch = 19,
      xlab = "Optimized resistance distance", ylab = "Fst")
 
@@ -81,15 +82,18 @@ plot(distances$distance[,,ibd], melip.Fst, pch = 19,
 # model selection:
 # fit a reduced model without "forestcover" covariate, and compare to 
 # full model via a likelihood ratio test
-fit_mlpe_reduced <- radish(melip.Fst ~ altitude, surface, radish::loglinear_conductance, radish::mlpe)
+fit_mlpe_reduced <- radish(melip.Fst ~ altitude, surface, 
+                           radish::loglinear_conductance, radish::mlpe)
 anova(fit_mlpe, fit_mlpe_reduced)
 
 # test for an interaction
-fit_mlpe_interaction <- radish(melip.Fst ~ forestcover * altitude, surface, radish::loglinear_conductance, radish::mlpe)
+fit_mlpe_interaction <- radish(melip.Fst ~ forestcover * altitude, surface, 
+                               radish::loglinear_conductance, radish::mlpe)
 anova(fit_mlpe, fit_mlpe_interaction)
 
 # test against null model of IBD
-fit_mlpe_ibd <- radish(melip.Fst ~ 1, surface, radish::loglinear_conductance, radish::mlpe)
+fit_mlpe_ibd <- radish(melip.Fst ~ 1, surface, 
+                       radish::loglinear_conductance, radish::mlpe)
 anova(fit_mlpe, fit_mlpe_ibd)
 
 # example of lower level interface:
