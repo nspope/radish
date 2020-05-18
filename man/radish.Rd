@@ -20,56 +20,84 @@ radish(
 )
 }
 \arguments{
-\item{formula}{A formula with the name of a matrix of observed genetic distances on the lhs, and covariates in the creation of 'data' on the rhs}
+\item{formula}{A formula with the name of a matrix of observed genetic distances on the lhs, and covariates in the creation of \code{data} on the rhs}
 
-\item{data}{An object of class 'radish_graph'}
+\item{data}{An object of class \code{radish_graph} (see \code{\link{conductance_surface}})}
 
-\item{conductance_model}{A function of class 'radish_conductance_model_factory'}
+\item{conductance_model}{A function of class \code{radish_conductance_model_factory} (see \code{\link{radish_conductance_model_factory}})}
 
-\item{measurement_model}{A function of class 'radish_measurement_model'}
+\item{measurement_model}{A function of class \code{radish_measurement_model} (see \code{\link{radish_measurement_model}})}
 
-\item{nu}{Number of genetic markers (potentially used by 'measurement_model')}
+\item{nu}{Number of genetic markers (potentially used by \code{measurement_model})}
 
 \item{theta}{Starting values for optimization}
 
 \item{leverage}{Compute influence measures and leverage?}
 
-\item{nonnegative}{Force regression-like 'measurement_model' to have nonnegative slope?}
+\item{nonnegative}{Force regression-like \code{measurement_model} to have nonnegative slope?}
 
-\item{conductance}{If TRUE, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)}
+\item{conductance}{If \code{TRUE}, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)}
 
-\item{optimizer}{The optimization algorithm to use: "newton" uses the exact Hessian, so computational cost grows linearly with the number of parameters; while "bfgs" uses an approximation with much reduced cost (but slower overall convergence)}
+\item{optimizer}{The optimization algorithm to use: \code{newton} uses the exact Hessian, with computational cost that grows linearly with the number of parameters; while \code{bfgs} uses an approximation with much reduced cost (but slower overall convergence)}
 
-\item{control}{A list containing options for the optimization routine (see ?NewtonRaphsonControl for list)}
+\item{control}{A list containing options for the optimization routine (see \code{\link{NewtonRaphsonControl}} for list)}
 
-\item{validate}{Numerical validation of leverage via 'numDeriv' (very slow, use for debugging small examples)}
+\item{validate}{Numerical validation of leverage via package \code{numDeriv} (very slow, use for debugging small examples)}
 }
 \value{
-An object of class 'radish'
+An object of class \code{radish}
 }
 \description{
-Calculates likelihood, gradient, hessian, and partial derivatives of a
-parameterized conductance surface, given a function mapping spatial data to
-conductance and a function mapping resistance distance (covariance) to
-genetic distance.
+Uses maximum likelihood to fit a parameterized conductance surface to genetic data,
+given a function mapping spatial data to conductance (a "conductance model")
+and a function mapping resistance distance (covariance) to genetic distance
+(a "measurement model").
 }
 \details{
+By "parameterized conductance surface", what is meant is a model where per-vertex conductance (and thus resistance distance) is a function of spatial covariates. The choice of function is referred to in this package as the "conductance model". The inverse problem (and the purpose of this package) is to estimate the parameters of the conductance model, by relating the (unknown, modelled) resistance distance to observed genetic dissimilarity via a probability model (referred to as the "measurement model" throughout this package).
+
+For example, a log-linear choice of conductance model is:
+
+  \code{conductance[i] = exp(covariates[i,] \%*\% theta)}
+
+where \code{theta} are unknown parameters and \code{covariates} is a design matrix. \code{radish} estimates \code{theta} as well as any nuisance parameters associated with the measurement model.
+
 If the fit is on the boundary (e.g. no spatial genetic structure) or is the null model of isolation-by-distance, the resulting object will not contain influence/leverage/gradient/hessian.
 }
 \examples{
+
 library(raster)
 
 data(melip)
 
-covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
+# scaling spatial covariates helps avoid numeric overflow
+covariates <- raster::stack(list(altitude = raster::scale(melip.altitude), 
+                                 forestcover = raster::scale(melip.forestcover)))
+
+# 
 surface <- conductance_surface(covariates, melip.coords, directions = 8)
 
-fit_mlpe <- radish(melip.Fst ~ altitude * forestcover, surface, 
+fit_nnls <- radish(melip.Fst ~ altitude * forestcover, data = surface, 
+                   radish::loglinear_conductance, radish::leastsquares)
+summary(fit_nnls)
+
+# different "measurement_model" that incorporates dependence
+# among pairwise measurements
+fit_mlpe <- radish(melip.Fst ~ altitude * forestcover, data = surface, 
                    radish::loglinear_conductance, radish::mlpe)
 summary(fit_mlpe)
 
-fit_nnls <- radish(melip.Fst ~ altitude * forestcover, surface, 
-                   radish::loglinear_conductance, radish::leastsquares)
-summary(fit_nnls)
+# conductance surface with 95\% CI
+fitted_conductance <- conductance(surface, fit_mlpe, quantile = 0.95)
+
+# test for an interaction using a likelihood ratio test
+fit_mlpe_interaction <- radish(melip.Fst ~ forestcover * altitude, data = surface, 
+                               radish::loglinear_conductance, radish::mlpe)
+anova(fit_mlpe, fit_mlpe_interaction)
+
+# test against null model of IBD using a LRT
+fit_mlpe_ibd <- radish(melip.Fst ~ 1, data = surface, 
+                       radish::loglinear_conductance, radish::mlpe)
+anova(fit_mlpe, fit_mlpe_ibd)
 
 }

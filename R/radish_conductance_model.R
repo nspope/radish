@@ -33,6 +33,15 @@ assemble_model_matrix <- function(formula, spdat)
   spdat
 }
 
+#' Conductance model factories
+#'
+#' Functions that generate objects of class "radish_conductance_model", that represent mappings from spatial data (e.g. rasters) to conductance. 
+#'
+#' @name radish_conductance_model_factory
+#' @seealso \code{\link{linear_conductance}}, \code{\link{loglinear_conductance}}
+#' @export
+NULL
+
 #' Log-link conductance model
 #'
 #' Returns a function of class "conductance_model" that represents a log-linear
