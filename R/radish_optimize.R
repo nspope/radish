@@ -212,10 +212,6 @@ print.radish <- function(x, digits = max(3L, getOption("digits") - 3L), ...)
     cat("Coefficients:\n")
     print.default(format(x$mle$theta, digits = digits), print.gap = 2L, quote = FALSE)
   }
-  else if (x$fit$boundary)
-  {
-    cat("Model fit is on boundary (e.g. no genetic structure), coefficients meaningless\n")
-  }
   else
   {
     cat("No coefficients\n")
@@ -299,7 +295,7 @@ print.summary.radish <- function(x, digits = max(3L, getOption("digits") - 3L), 
   }
   else if (x$boundary)
   {
-    cat("Model fit is on boundary (e.g. no genetic structure), no valid coefficients\n")
+    cat("Model fit is on boundary (e.g. no genetic structure), no meaningful coefficients\n")
   }
   else
   {

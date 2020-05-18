@@ -85,7 +85,7 @@ radish_grid <- function(theta,
                                   hessian  = FALSE,
                                   partial  = FALSE,
                                   nonnegative = nonnegative)
-      ll[i]   <- obj$objective
+      ll[i]   <- -obj$objective
       phi[,i] <- obj$phi
       if (covariance)
         cv[,,i] <- as.matrix(obj$covariance)
