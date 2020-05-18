@@ -1,7 +1,7 @@
 Package: radish
 Type: Package
 Title: Fast gradient-based optimization of resistance surfaces
-Version: 0.0.1
+Version: 0.0.2
 Date: 2020-05-05
 Author: Nathaniel S. Pope
 Maintainer: Nathaniel S. Pope <nspope@utexas.edu>

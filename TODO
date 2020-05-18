@@ -1,3 +1,6 @@
 [ ] Add example of categorical covariate/raster's as.factor
 [ ] Support for I(), poly(), etc in formula
 [ ] More hand-holding for visualisation (add ggplot2 to IMPORTS)
+[ ] logLik and AIC methods
+[ ] For compatibility with Circuitscape, provide option for edge conductance to be inverse of sum of cell resistances
+[ ] Stan hooks
