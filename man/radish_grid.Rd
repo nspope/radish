@@ -5,30 +5,33 @@
 \title{Evaluate likelihood of a parameterized conductance surface}
 \usage{
 radish_grid(
-  f,
-  g,
-  s,
-  S,
   theta,
+  formula,
+  data,
+  conductance_model = radish::loglinear_conductance,
+  measurement_model = radish::mlpe,
   nu = NULL,
   nonnegative = TRUE,
+  conductance = TRUE,
   covariance = FALSE
 )
 }
 \arguments{
-\item{f}{A function of class 'conductance_model'}
-
-\item{g}{A function of class 'measurement_model'}
-
-\item{s}{An object of class 'radish_graph'}
-
-\item{S}{A matrix of observed genetic distances}
-
 \item{theta}{A matrix of dimension (grid size) x (number of parameters)}
+
+\item{formula}{A formula with the name of a matrix of observed genetic distances on the lhs, and covariates used in the creation of 'data' on the rhs}
+
+\item{data}{An object of class 'radish_graph'}
+
+\item{conductance_model}{A function of class 'radish_conductance_model_factory'}
+
+\item{measurement_model}{A function of class 'radish_measurement_model'}
 
 \item{nu}{Number of genetic markers (potentially used by 'g')}
 
 \item{nonnegative}{Force regression-like 'measurement_model' to have nonnegative slope?}
+
+\item{conductance}{If TRUE, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)}
 
 \item{covariance}{If TRUE, additionally return (a submatrix of) the generalized inverse of graph Laplacian across the grid}
 }
@@ -44,11 +47,12 @@ library(raster)
 
 data(melip)
 
-covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
+covariates <- raster::stack(list(altitude=raster::scale(melip.altitude), forestcover=raster::scale(melip.forestcover)))
 surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
 
-theta <- as.matrix(expand.grid(x=seq(-6,6,length.out=21), y=seq(-6,6,length.out=21)))
-grid <- radish_grid(radish::loglinear_conductance, radish::mlpe, surface, melip.Fst, theta, covariance=FALSE)
+theta <- as.matrix(expand.grid(x=seq(-1,1,length.out=21), y=seq(-1,1,length.out=21)))
+grid <- radish_grid(theta, melip.Fst ~ forestcover + altitude, surface,
+                    radish::loglinear_conductance, radish::mlpe)
 
 library(ggplot2)
 ggplot(data.frame(loglik=grid$loglik, grid$theta)) + 

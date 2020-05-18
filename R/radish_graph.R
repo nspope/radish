@@ -32,27 +32,11 @@
 #'
 #' @export
 
-conductance_surface <- function(formula, covariates, coords, directions=4, saveStack=TRUE)
+conductance_surface <- function(covariates, coords, directions=4, saveStack=TRUE)
 {
-  stopifnot(class(formula) == "formula")
   stopifnot(class(covariates) == "RasterStack")
   stopifnot(class(coords) == "SpatialPoints")
   stopifnot(directions %in% c(4, 8))
-
-  # check if formula is consistant with data, remove response, add intercept
-  formula_covariates <- attr(delete.response(terms(formula)), "factors")
-  stopifnot(rownames(formula_covariates) %in% names(covariates))
-  formula <- reformulate(colnames(formula_covariates))
-
-  # if any layers are not in formula, remove them
-  missing_covariates <- !(names(covariates) %in% rownames(formula_covariates))
-  if (any(missing_covariates))
-  {
-    unused_covariates <- names(covariates)[missing_covariates]
-    warning("Removed unused spatial covariates: ", 
-            paste(unused_covariates, collapse = " "))
-    covariates <- raster::dropLayer(covariates, unused_covariates)
-  }
 
   # throw a warning if missing cells are not identical across layers
   spdat   <- as.matrix(raster::getValues(covariates))
@@ -111,12 +95,6 @@ conductance_surface <- function(formula, covariates, coords, directions=4, saveS
     }
   }
 
-  # get model matrix and check for rank deficiency
-  # NOTE: in future I could make this sparse via Matrix::sparse.model.matrix?
-  spdat <- model.matrix(formula, data = spdat)
-  stopifnot(qr(spdat)$rank == ncol(spdat))
-  spdat <- spdat[,colnames(spdat) != "(Intercept)", drop=FALSE]
-
   # form and factorize Laplacian
   N    <- nrow(spdat)
   Q    <- Matrix::sparseMatrix(i = adj[,1], j = adj[,2], dims = c(N, N),
@@ -135,30 +113,10 @@ conductance_surface <- function(formula, covariates, coords, directions=4, saveS
               "covariates"   = colnames(spdat), 
               "laplacian"    = Q,
               "choleski"     = LQn,
-              "formula"      = formula,
               "stack"        = if(saveStack) covariates else NULL)
   class(out) <- "radish_graph"
   out
 }
-
-downdate <- function(x, ...)
-{
-  UseMethod("downdate")
-}
-
-downdate.radish_graph <- function(object, formula) 
-{
-  # update formula
-  object$formula <- update(object$formula, formula)
-
-  # update model matrix
-  object$x <- model.matrix(object$formula, data = data.frame(object$x))
-  object$x <- object$x[,colnames(object$x) != "(Intercept)",drop=FALSE]
-
-  object$covariates <- colnames(object$x)
-
-  object
-} #NOTE: this can only 'downdate' an existing 'radish_graph'
 
 conductance <- function(x, ...)
 {
@@ -168,10 +126,10 @@ conductance <- function(x, ...)
 conductance.radish_graph <- function(object, fit, quantile = 0.95)
 {
   stopifnot(class(fit) == "radish")
-  stopifnot(!fit$boundary)
+  stopifnot(!fit$fit$boundary && !is.null(fit$mle$theta))
 
-  conductance <- fit$f(object$x, fit$theta)
-  ci <- conductance$confint(x = object$x, theta = fit$theta, vcov = fit$vcov, 
+  conductance <- fit$submodels$f(fit$mle$theta)
+  ci <- conductance$confint(theta = fit$mle$theta, vcov = -solve(fit$mle$hessian), 
                             quantile = quantile, scale = "conductance")
   colnames(ci) <- paste0(c("lower", "upper"), round(100*quantile, 1))
 
@@ -192,7 +150,7 @@ conductance.radish_graph <- function(object, fit, quantile = 0.95)
   }
   else
   {
-    warning("No raster associated with graph, returning conductance as vector")
+    warning("No rasters associated with graph, returning conductance as vector")
     out <- cbind("est" = conductance$conductance, ci)
     out
   }
@@ -209,5 +167,5 @@ Lattice1D <- function(spdat, coords, fn)
     rl[[paste0("var", i)]] <- raster::raster(as.matrix(spdat[,i]))
   rl <- raster::stack(rl)
 
-  conductance_surface(reformulate(names(rl)), rl, coords)
+  conductance_surface(rl, coords)
 }

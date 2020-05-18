@@ -9,7 +9,7 @@ radish_algorithm(
   g,
   s,
   S,
-  theta = rep(0, ncol(s$x)),
+  theta,
   nu = NULL,
   objective = TRUE,
   gradient = TRUE,

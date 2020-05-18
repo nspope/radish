@@ -4,14 +4,25 @@
 \alias{radish_distance}
 \title{Resistance distances from a parameterized conductance surface}
 \usage{
-radish_distance(f, s, theta, covariance = FALSE)
+radish_distance(
+  theta,
+  formula,
+  data,
+  conductance_model = radish::loglinear_conductance,
+  conductance = TRUE,
+  covariance = FALSE
+)
 }
 \arguments{
-\item{f}{A function of class 'conductance_model'}
-
-\item{s}{An object of class 'radish_graph'}
-
 \item{theta}{A matrix of dimension (grid size) x (number of parameters)}
+
+\item{formula}{A formula with covariates used in the creation of 'data' on the rhs}
+
+\item{data}{An object of class 'radish_graph'}
+
+\item{conductance_model}{A function of class 'radish_conductance_model_factory'}
+
+\item{conductance}{If TRUE, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)}
 
 \item{covariance}{If TRUE, instead of resistance distances return the associated submatrix of the generalized inverse of graph Laplacian}
 }

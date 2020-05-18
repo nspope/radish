@@ -4,10 +4,10 @@
 \alias{loglinear_conductance}
 \title{Log-link conductance model}
 \usage{
-loglinear_conductance(x, theta)
+loglinear_conductance(formula, x)
 }
 \description{
-A function of class "conductance_model" that represents a log-linear
+Returns a function of class "conductance_model" that represents a log-linear
 mapping from spatial covariates to conductance
 }
 \details{

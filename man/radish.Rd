@@ -5,29 +5,30 @@
 \title{Optimize a parameterized conductance surface}
 \usage{
 radish(
-  f,
-  g,
-  s,
-  S,
+  formula,
+  data,
+  conductance_model = radish::loglinear_conductance,
+  measurement_model = radish::mlpe,
   nu = NULL,
-  theta = rep(0, ncol(s$x)),
+  theta = NULL,
   leverage = TRUE,
   nonnegative = TRUE,
-  validate = FALSE,
+  conductance = TRUE,
   optimizer = c("newton", "bfgs"),
-  control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-06, ftol = 1e-06)
+  control = NewtonRaphsonControl(verbose = TRUE, ctol = 1e-06, ftol = 1e-06),
+  validate = FALSE
 )
 }
 \arguments{
-\item{f}{A function of class 'conductance_model'}
+\item{formula}{A formula with the name of a matrix of observed genetic distances on the lhs, and covariates in the creation of 'data' on the rhs}
 
-\item{g}{A function of class 'measurement_model'}
+\item{data}{An object of class 'radish_graph'}
 
-\item{s}{An object of class 'radish_graph'}
+\item{conductance_model}{A function of class 'radish_conductance_model_factory'}
 
-\item{S}{A matrix of observed genetic distances}
+\item{measurement_model}{A function of class 'radish_measurement_model'}
 
-\item{nu}{Number of genetic markers (potentially used by 'g')}
+\item{nu}{Number of genetic markers (potentially used by 'measurement_model')}
 
 \item{theta}{Starting values for optimization}
 
@@ -35,11 +36,13 @@ radish(
 
 \item{nonnegative}{Force regression-like 'measurement_model' to have nonnegative slope?}
 
-\item{validate}{Numerical validation via 'numDeriv' (very slow, use for debugging small examples)}
+\item{conductance}{If TRUE, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)}
 
 \item{optimizer}{The optimization algorithm to use: "newton" uses the exact Hessian, so computational cost grows linearly with the number of parameters; while "bfgs" uses an approximation with much reduced cost (but slower overall convergence)}
 
 \item{control}{A list containing options for the optimization routine (see ?NewtonRaphsonControl for list)}
+
+\item{validate}{Numerical validation of leverage via 'numDeriv' (very slow, use for debugging small examples)}
 }
 \value{
 An object of class 'radish'
@@ -50,15 +53,23 @@ parameterized conductance surface, given a function mapping spatial data to
 conductance and a function mapping resistance distance (covariance) to
 genetic distance.
 }
+\details{
+If the fit is on the boundary (e.g. no spatial genetic structure) or is the null model of isolation-by-distance, the resulting object will not contain influence/leverage/gradient/hessian.
+}
 \examples{
 library(raster)
 
 data(melip)
 
 covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
-surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
+surface <- conductance_surface(covariates, melip.coords, directions = 8)
 
-fit_nnls <- radish(radish::loglinear_conductance, radish::leastsquares, surface, melip.Fst)
+fit_mlpe <- radish(melip.Fst ~ altitude * forestcover, surface, 
+                   radish::loglinear_conductance, radish::mlpe)
+summary(fit_mlpe)
+
+fit_nnls <- radish(melip.Fst ~ altitude * forestcover, surface, 
+                   radish::loglinear_conductance, radish::leastsquares)
 summary(fit_nnls)
 
 }

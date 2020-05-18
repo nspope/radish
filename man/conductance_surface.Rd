@@ -4,24 +4,18 @@
 \alias{conductance_surface}
 \title{Create a parameterized conductance surface}
 \usage{
-conductance_surface(
-  formula,
-  covariates,
-  coords,
-  directions = 4,
-  saveStack = TRUE
-)
+conductance_surface(covariates, coords, directions = 4, saveStack = TRUE)
 }
 \arguments{
-\item{formula}{A 'formula' object for the spatial data in 'covariates' (see 'Details')}
-
 \item{covariates}{A 'RasterStack' containing spatial covariates}
 
-\item{coords}{A 'SpatialPoints' object containing coordinates for a set of target cells}
+\item{coords}{A 'SpatialPoints' object containing coordinates for a set of focal cells}
 
 \item{directions}{If '4', consider only horizontal/vertical neighbours as adjacent; if '8', also consider diagonal neighbours as adjacent}
 
 \item{saveStack}{If TRUE, the modified RasterStack is returned}
+
+\item{formula}{A 'formula' object for the spatial data in 'covariates' (see 'Details')}
 }
 \value{
 An object of class 'radish_graph'
@@ -32,11 +26,11 @@ spatial coordinates (class 'SpatialPoints'), create an abstract parameterized
 conductance surface.
 }
 \details{
-NAs are shared across components of the RasterStack, and a warning is thrown if a given cell has mixed NA and non-NA values across the stack. Be cautious about comparing models when this is the case, as models fit to conductance surfaces with different NA patterns will have different sets of vertices.
+NAs are shared across rasters in 'covariates', and a warning is thrown if a given cell has mixed NA and non-NA values across the stack. Comparing models with different patterns of missing spatial data (e.g. fit to different stacks of rasters) can give superficially inconsistant results, as these essentially involve different sets of vertices. The recommended way to create sets of nested models (with an invariant set of vertices) is via '?downdate'.
 
-Disconnected components are identified and removed, so that only the largest connected component is retained.
+Disconnected components are identified and removed, so that only the largest connected component in the graph is retained. The function aborts if there are focal cells that belong to a disconnected component.
 
-The spatial data that is ultimately used in 'radish' (by an object of class 'conductance_model') is created from 'formula' and 'covariates' via 'model.matrix'. This is largely useful for creating dummy codings of categorical variables, expanding interactions, and so on.
+The design matrix for the spatial data that is ultimately used in 'radish' (by an object of class 'conductance_model') is created from 'formula' and 'covariates' via 'model.matrix'.
 }
 \examples{
 library(raster)
@@ -44,7 +38,7 @@ library(raster)
 data(melip)
 
 covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
-surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
+surface <- radish_conductance_surface(~altitude * forestcover, covariates, melip.coords, directions = 8)
 
 }
 \references{
