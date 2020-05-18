@@ -233,7 +233,7 @@ summary.radish <- function(x, ...)
   {
     ztable <- matrix(0, length(x$mle$theta), 4)
     colnames(ztable)      <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
-    rownames(ztable)      <- colnames(x$model.frame)
+    rownames(ztable)      <- names(x$mle$theta)
     ztable[,"Estimate"]   <- x$mle$theta
     ztable[,"Std. Error"] <- sqrt(diag(solve(x$fit$hessian)))
     ztable[,"z value"]    <- ztable[,"Estimate"]/ztable[,"Std. Error"]
@@ -294,7 +294,7 @@ print.summary.radish <- function(x, digits = max(3L, getOption("digits") - 3L), 
     {
       cat("\n")
       cat("Correlation of Coefficients:\n")
-      print(x$vcor)
+      print(as.dist(x$vcor))
     }
   }
   else if (x$boundary)
@@ -305,6 +305,14 @@ print.summary.radish <- function(x, digits = max(3L, getOption("digits") - 3L), 
   {
     cat("No coefficients\n")
   }
+}
+
+coef.radish <- function(x)
+{
+  if (!is.null(x$mle$theta))
+    return(x$mle$theta)
+  else
+    return(c())
 }
 
 fitted.radish <- function(x, type = c("response", "distance", "covariance"), ...)

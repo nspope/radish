@@ -44,7 +44,7 @@ BoxConstrainedBFGS <- function(par, fn, lower = rep(-Inf, length(par)), upper = 
 
   convergence <- 0
   initialized <- 0
-  par <- matrix(par, length(par), 1)
+  par <- as.matrix(par)
 
   for (i in 1:maxit)
   {

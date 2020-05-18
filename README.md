@@ -46,15 +46,19 @@ plot(fitted_conductance[["est"]], main = "Fitted conductance surface\n(forestcov
 plot(fitted_conductance[["lower95"]], main = "Fitted conductance surface\n(lower 95% CI)")
 plot(fitted_conductance[["upper95"]], main = "Fitted conductance surface\n(upper 95% CI)")
 
-# visualise likelihood surface across grid for reduced model (takes awhile)
+# visualise likelihood surface across grid (takes awhile)
 theta <- as.matrix(expand.grid(forestcover=seq(-1,1,length.out=21), altitude=seq(-1,1,length.out=21)))
 grid <- radish_grid(theta, melip.Fst ~ forestcover + altitude, surface,
                     radish::loglinear_conductance, radish::mlpe)
 
 library(ggplot2)
-ggplot(data.frame(loglik=grid$loglik, grid$theta), aes(x=forestcover, y=altitude)) + 
+ggplot(data.frame(loglik=grid$loglik, grid$theta), 
+       aes(x=forestcover, y=altitude)) + 
   geom_tile(aes(fill=-loglik)) + 
   geom_contour(aes(z=-loglik), color="black") +
+  annotate(geom = "point", 
+           x = coef(fit_mlpe)["forestcover"], 
+           y = coef(fit_mlpe["altitude"]), col = "red") +
   theme_bw() +
   xlab(expression(theta[altitude])) +
   ylab(expression(theta[forestcover]))
@@ -66,6 +70,7 @@ ibd <- which(theta[,1] == 0 & theta[,2] == 0)
 plot(distances$distance[,,ibd], melip.Fst, pch = 19, 
      xlab = "Null resistance distance (IBD)", ylab = "Fst")
 
+# model selection:
 # fit a reduced model without "forestcover" covariate, and compare to 
 # full model via a likelihood ratio test
 fit_mlpe_reduced <- radish(melip.Fst ~ altitude, surface, radish::loglinear_conductance, radish::mlpe)

@@ -66,7 +66,7 @@ BoxConstrainedNewton <- function(par, fn, lower = rep(-Inf, length(par)), upper 
     cat("Projected Newton-Raphson with Hager-Zhang line search\n")
 
   convergence <- 0
-  par <- matrix(par, length(par), 1)
+  par <- as.matrix(par)
 
   for (i in 1:maxit)
   {
