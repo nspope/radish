@@ -106,7 +106,8 @@ radish_algorithm(radish::loglinear_conductance(~forestcover + altitude, surface$
                  gradient = TRUE, hessian = TRUE)$hessian
 # numerical verification (not run)
 #numDeriv::hessian(function(x)
-#     radish_algorithm(radish::loglinear_conductance, radish::generalized_wishart, surface, 
+#     radish_algorithm(radish::loglinear_conductance(~forestcover + altitude, surface$x), 
+#                      radish::generalized_wishart, surface, 
 #                      pmax(melip.Fst, 0), nu = 1000, theta = x)$objective,
 #                  c(-0.3, 0.3))
 ```
