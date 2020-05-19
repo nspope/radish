@@ -102,8 +102,9 @@ anova(fit_mlpe, fit_mlpe_ibd)
 # the integer codes are used)
 forestcover_class <- cut(raster::values(melip.forestcover), breaks = c(0, 1/3, 1/6, 1)) 
 melip.forestcover_cat <- raster::ratify(raster::setValues(melip.forestcover, as.numeric(forestcover_class)))
+
 RAT <- levels(melip.forestcover_cat)[[1]]
-RAT$VALUE <- levels(forestcover_class)
+RAT$VALUE <- levels(forestcover_class) #explicitly defines names in the RAT
 levels(melip.forestcover_cat) <- RAT
 
 covariates_cat <- raster::stack(list(forestcover = melip.forestcover_cat,

@@ -63,6 +63,8 @@ For example, a log-linear choice of conductance model is:
 where \code{theta} are unknown parameters and \code{covariates} is a design matrix. \code{radish} estimates \code{theta} as well as any nuisance parameters associated with the measurement model.
 
 If the fit is on the boundary (e.g. no spatial genetic structure) or is the null model of isolation-by-distance, the resulting object will not contain influence/leverage/gradient/hessian.
+
+For handling of categorical covariates, see \code{details} of \code{\link{conductance_surface}} and examples below. The dummy coding of categorical covariates is created by \code{conductance_model} (e.g. \code{radish::loglinear_conductance}) for flexiblity. Currently, all the in-built conductance models in \code{radish} use the default contrast coding (e.g. for a categorical covariate with K factors, the K-1 mean differences against a reference category). For these conductance models, the intercept is excluded if it is not identifiable.
 }
 \examples{
 
@@ -99,5 +101,25 @@ anova(fit_mlpe, fit_mlpe_interaction)
 fit_mlpe_ibd <- radish(melip.Fst ~ 1, data = surface, 
                        radish::loglinear_conductance, radish::mlpe)
 anova(fit_mlpe, fit_mlpe_ibd)
+
+# categorical covariates:
+# rasters of categorical covariates must have an associated RAT, see ?raster::ratify 
+# and 'details' section of ?conductance_surface
+forestcover_class <- cut(raster::values(melip.forestcover), breaks = c(0, 1/3, 1/6, 1)) 
+melip.forestcover_cat <- 
+  raster::ratify(raster::setValues(melip.forestcover, as.numeric(forestcover_class)))
+
+RAT <- levels(melip.forestcover_cat)[[1]]
+RAT$VALUE <- levels(forestcover_class) #explicitly define level names
+levels(melip.forestcover_cat) <- RAT
+
+covariates_cat <- raster::stack(list(forestcover = melip.forestcover_cat,
+                                     altitude = melip.altitude)) 
+
+surface_cat <- conductance_surface(covariates_cat, melip.coords, directions = 8)
+
+fit_mlpe_cat <- radish(melip.Fst ~ forestcover + altitude, surface_cat, 
+                       radish::loglinear_conductance, radish::mlpe)
+summary(fit_mlpe_cat)
 
 }
