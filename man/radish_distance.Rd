@@ -16,32 +16,25 @@ radish_distance(
 \arguments{
 \item{theta}{A matrix of dimension (grid size) x (number of parameters)}
 
-\item{formula}{A formula with covariates used in the creation of 'data' on the rhs}
+\item{formula}{A formula with the name of a matrix of observed genetic distances on the lhs, and covariates in the creation of \code{data} on the rhs}
 
-\item{data}{An object of class 'radish_graph'}
+\item{data}{An object of class \code{radish_graph} (see \code{\link{conductance_surface}})}
 
-\item{conductance_model}{A function of class 'radish_conductance_model_factory'}
+\item{conductance_model}{A function of class \code{radish_conductance_model_factory} (see \code{\link{radish_conductance_model_factory}})}
 
-\item{conductance}{If TRUE, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)}
+\item{conductance}{If \code{TRUE}, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (unused; TODO)}
 
-\item{covariance}{If TRUE, instead of resistance distances return the associated submatrix of the generalized inverse of graph Laplacian}
+\item{covariance}{If \code{TRUE}, instead of a matrix of resistance distances, return the associated submatrix of the generalized inverse of graph Laplacian}
 }
 \value{
-An object of class 'radish_grid'
+An object of class \code{radish_grid}
 }
 \description{
 Calculates resistance distances associated with a parameterized conductance surface across
 a grid of parameter values.
 }
 \examples{
-library(raster)
 
-data(melip)
-
-covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
-surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
-
-theta <- as.matrix(expand.grid(x=seq(-6,6,length.out=21), y=seq(-6,6,length.out=21)))
-distances <- radish_distance(radish::loglinear_conductance, surface, theta)
+ TODO
 
 }

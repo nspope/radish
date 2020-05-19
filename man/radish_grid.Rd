@@ -19,46 +19,32 @@ radish_grid(
 \arguments{
 \item{theta}{A matrix of dimension (grid size) x (number of parameters)}
 
-\item{formula}{A formula with the name of a matrix of observed genetic distances on the lhs, and covariates used in the creation of 'data' on the rhs}
+\item{formula}{A formula with the name of a matrix of observed genetic distances on the lhs, and covariates in the creation of \code{data} on the rhs}
 
-\item{data}{An object of class 'radish_graph'}
+\item{data}{An object of class \code{radish_graph} (see \code{\link{conductance_surface}})}
 
-\item{conductance_model}{A function of class 'radish_conductance_model_factory'}
+\item{conductance_model}{A function of class \code{radish_conductance_model_factory} (see \code{\link{radish_conductance_model_factory}})}
 
-\item{measurement_model}{A function of class 'radish_measurement_model'}
+\item{measurement_model}{A function of class \code{radish_measurement_model} (see \code{\link{radish_measurement_model}})}
 
-\item{nu}{Number of genetic markers (potentially used by 'g')}
+\item{nu}{Number of genetic markers (potentially used by \code{measurement_model})}
 
-\item{nonnegative}{Force regression-like 'measurement_model' to have nonnegative slope?}
+\item{nonnegative}{Force regression-like \code{measurement_model} to have nonnegative slope?}
 
-\item{conductance}{If TRUE, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)}
+\item{conductance}{If \code{TRUE}, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (unused; TODO)}
 
-\item{covariance}{If TRUE, additionally return (a submatrix of) the generalized inverse of graph Laplacian across the grid}
+\item{covariance}{If \code{TRUE}, additionally return (a submatrix of) the generalized inverse of graph Laplacian across the grid}
 }
 \value{
-An object of class 'radish_grid'
+An object of class \code{radish_grid}, containing:
 }
 \description{
-Calculates profile likelihood of a parameterized conductance surface across
-a grid of parameter values.
+Calculates the profile likelihood of a parameterized conductance surface across
+a grid of parameter values (e.g. the nuisance parameters are optimized at each
+point on the grid).
 }
 \examples{
-library(raster)
 
-data(melip)
-
-covariates <- raster::stack(list(altitude=raster::scale(melip.altitude), forestcover=raster::scale(melip.forestcover)))
-surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
-
-theta <- as.matrix(expand.grid(x=seq(-1,1,length.out=21), y=seq(-1,1,length.out=21)))
-grid <- radish_grid(theta, melip.Fst ~ forestcover + altitude, surface,
-                    radish::loglinear_conductance, radish::mlpe)
-
-library(ggplot2)
-ggplot(data.frame(loglik=grid$loglik, grid$theta)) + 
-  geom_tile(aes(x=x,y=y,fill=-loglik)) + theme_bw() +
-  geom_contour(aes(x=x,y=y,z=-loglik), color="black") +
-  xlab(expression(theta[altitude])) +
-  ylab(expression(theta[forestcover]))
+ TODO
 
 }

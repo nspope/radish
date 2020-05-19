@@ -36,7 +36,7 @@ radish(
 
 \item{nonnegative}{Force regression-like \code{measurement_model} to have nonnegative slope?}
 
-\item{conductance}{If \code{TRUE}, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)}
+\item{conductance}{If \code{TRUE}, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (unused; TODO)}
 
 \item{optimizer}{The optimization algorithm to use: \code{newton} uses the exact Hessian, with computational cost that grows linearly with the number of parameters; while \code{bfgs} uses an approximation with much reduced cost (but slower overall convergence)}
 
@@ -74,14 +74,14 @@ data(melip)
 covariates <- raster::stack(list(altitude = raster::scale(melip.altitude), 
                                  forestcover = raster::scale(melip.forestcover)))
 
-# 
+# create parameterized conductance surface
 surface <- conductance_surface(covariates, melip.coords, directions = 8)
 
 fit_nnls <- radish(melip.Fst ~ altitude * forestcover, data = surface, 
                    radish::loglinear_conductance, radish::leastsquares)
 summary(fit_nnls)
 
-# different "measurement_model" that incorporates dependence
+# a different "measurement_model" that incorporates dependence
 # among pairwise measurements
 fit_mlpe <- radish(melip.Fst ~ altitude * forestcover, data = surface, 
                    radish::loglinear_conductance, radish::mlpe)
