@@ -27,6 +27,7 @@
 #' 
 #' covariates <- raster::stack(list(altitude=raster::scale(melip.altitude), 
 #'                                  forestcover=raster::scale(melip.forestcover)))
+#'
 #' surface <- conductance_surface(covariates, melip.coords, directions = 8)
 #'
 #' @export

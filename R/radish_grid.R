@@ -18,8 +18,34 @@
 #'
 #' @examples
 #'
-#'  TODO
+#' library(raster)
+#' 
+#' data(melip)
+#' 
+#' covariates <- raster::stack(list(altitude = raster::scale(melip.altitude), 
+#'                                  forestcover = raster::scale(melip.forestcover)))
 #'
+#' fit_mlpe <- radish(melip.Fst ~ altitude * forestcover, data = surface, 
+#'                    radish::loglinear_conductance, radish::mlpe)
+#' 
+#' theta <- as.matrix(expand.grid(forestcover=seq(-1,1,length.out=21), 
+#'                                altitude=seq(-1,1,length.out=21)))
+#'
+#' grid <- radish_grid(theta, melip.Fst ~ forestcover + altitude, surface,
+#'                     radish::loglinear_conductance, radish::mlpe)
+#' 
+#' library(ggplot2)
+#' ggplot(data.frame(loglik=grid$loglik, grid$theta), 
+#'        aes(x=forestcover, y=altitude)) + 
+#'   geom_tile(aes(fill=loglik)) + 
+#'   geom_contour(aes(z=loglik), color="black") +
+#'   annotate(geom = "point", colour = "red",
+#'            x = coef(fit_mlpe)["forestcover"], 
+#'            y = coef(fit_mlpe)["altitude"]) +
+#'   theme_bw() +
+#'   xlab(expression(theta[altitude])) +
+#'   ylab(expression(theta[forestcover]))
+#' 
 #' @export
 
 radish_grid <- function(theta,
@@ -33,6 +59,7 @@ radish_grid <- function(theta,
                         covariance  = FALSE)
 {
   stopifnot(is.matrix(theta))
+  # TODO: check that colnames of theta match formula
 
   # get response, remove lhs from formula
   terms    <- terms(formula)
@@ -101,7 +128,22 @@ radish_grid <- function(theta,
 #'
 #' @examples
 #'
-#'  TODO
+#' library(raster)
+#' 
+#' data(melip)
+#' 
+#' covariates <- raster::stack(list(altitude = raster::scale(melip.altitude), 
+#'                                  forestcover = raster::scale(melip.forestcover)))
+#'
+#' theta <- as.matrix(expand.grid(forestcover=seq(-1,1,length.out=21), 
+#'                                altitude=seq(-1,1,length.out=21)))
+#'
+#' distances <- radish_distance(theta, ~forestcover + altitude, 
+#'                              surface, radish::loglinear_conductance)
+#' 
+#' ibd <- which(theta[,1] == 0 & theta[,2] == 0)
+#' plot(distances$distance[,,ibd], melip.Fst, pch = 19, 
+#'      xlab = "Null resistance distance (IBD)", ylab = "Fst")
 #' 
 #' @export
 
@@ -113,6 +155,7 @@ radish_distance <- function(theta,
                             covariance  = FALSE)
 {
   stopifnot(is.matrix(theta))
+  # TODO: check that colnames of theta match formula
 
   # get response, remove lhs from formula
   terms    <- terms(formula)
