@@ -1,48 +1,55 @@
 #' (Nonnegative) least squares
 #'
-#' A function of class "measurement_model" that calculates likelihood,
+#' A function of class \code{measurement_model} that calculates likelihood,
 #' gradient, hessian, and partial derivatives of nuisance parameters and the
-#' Laplacian generalized inverse, using (possibly nonnegative) least squares.
+#' Laplacian generalized inverse, using nonnegative least squares.
 #'
-#' @param E A submatrix of the generalized inverse of the graph Laplacian (alternatively, a covariance matrix)
+#' @param E A submatrix of the generalized inverse of the graph Laplacian (e.g. a covariance matrix)
 #' @param S A matrix of observed genetic distances
 #' @param phi Nuisance parameters (see details)
-#' @param nu Number of genetic markers (ignored)
-#' @param gradient Compute gradient of negative loglikelihood wrt phi?
-#' @param hessian Compute Hessian matrix of negative loglikelihood wrt phi?
-#' @param partial Compute second partial derivatives of negative loglikelihood wrt phi and spatial covariates/observed genetic distances
+#' @param nu Unused
+#' @param gradient Compute gradient of negative loglikelihood with regard to \code{phi}?
+#' @param hessian Compute Hessian matrix of negative loglikelihood with regard to \code{phi}?
+#' @param partial Compute second partial derivatives of negative loglikelihood with regard to \code{phi}, \code{E}, \code{S}?
 #' @param nonnegative Force slope to be nonnegative?
-#' @param validate Numerical validation via 'numDeriv' (very slow, use for debugging small examples)
+#' @param validate Numerical validation via package \code{numDeriv} (very slow, use for debugging small examples)
 #'
-#' @details The nuisance parameters are the intercept, slope, and log residual
-#' standard deviation of the regression. If 'phi' is not supplied, the MLE of
-#' phi is returned using 'lm'
+#' @details The nuisance parameters \code{phi} are the intercept ("alpha"), slope ("beta"), and negative log residual
+#' standard deviation ("tau") of the least squares regression. If not supplied, \code{phi} 
+#' is estimated via maximum likelihood by \code{nlme::gls}.
 #'
-#' @return A list containing at a minimum:
+#' TODO: formula
+#'
+#' @seealso \code{\link{radish_measurement_model}}
+#'
+#' @return A list containing:
 #'  \item{covariance}{rows/columns of the generalized inverse of the graph Laplacian for a subset of target vertices}
-#' Additionally, if 'objective == TRUE':
-#'  \item{objective}{(if 'objective') the negative loglikelihood}
-#'  \item{fitted}{((if 'objective') a matrix of expected genetic distances among target vertices}
-#'  \item{boundary}{(if 'objective') is the MLE on the boundary (e.g. no genetic structure)?}
-#'  \item{gradient}{(if 'gradient') gradient of negative loglikelihood with respect to phi}
-#'  \item{hessian}{(if 'hessian') Hessian matrix of the negative loglikelihood with respect to phi}
-#'  \item{gradient_E}{(if 'partial') gradient with respect to the generalized inverse of the graph Laplacian}
-#'  \item{partial_E}{(if 'partial') Jacobian of 'gradient_E' with respect to phi}
-#'  \item{partial_S}{(if 'partial') Jacobian of 'gradient' with respect to S}
-#'  \item{jacobian_E}{(if 'partial') a function used for reverse algorithmic differentiation}
-#'  \item{jacobian_S}{(if 'partial') a function used for reverse algorithmic differentiation}
+#'  \item{objective}{(if \code{objective}) the negative loglikelihood}
+#'  \item{fitted}{((if \code{objective}) a matrix of expected genetic distances among target vertices}
+#'  \item{boundary}{(if \code{objective}) is the MLE on the boundary (e.g. no genetic structure)?}
+#'  \item{gradient}{(if \code{gradient}) gradient of negative loglikelihood with respect to phi}
+#'  \item{hessian}{(if \code{hessian}) Hessian matrix of the negative loglikelihood with respect to phi}
+#'  \item{gradient_E}{(if \code{partial}) gradient with respect to the generalized inverse of the graph Laplacian}
+#'  \item{partial_E}{(if \code{partial}) Jacobian of \code{gradient_E} with respect to phi}
+#'  \item{partial_S}{(if \code{partial}) Jacobian of \code{gradient} with respect to S}
+#'  \item{jacobian_E}{(if \code{partial}) a function used for reverse algorithmic differentiation}
+#'  \item{jacobian_S}{(if \code{partial}) a function used for reverse algorithmic differentiation}
 #'
 #' @examples
+#'
 #' library(raster)
 #' 
 #' data(melip)
 #' 
 #' covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
-#' surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
+#' surface <- conductance_surface(covariates, melip.coords, directions = 8)
 #'
-#' # null (IBD) resistance distance
-#' laplacian_inv <- radish_distance(radish::loglinear_conductance, surface, 
-#'                                  theta = matrix(0, 1, 2), covariance = TRUE)$covariance[,,1]
+#' # inverse of graph Laplacian at null model (IBD) 
+#' laplacian_inv <- radish_distance(theta = matrix(0, 1, 2), 
+#'                                  formula = ~forestcover + altitude,
+#'                                  data = surface,
+#'                                  radish::loglinear_conductance, 
+#'                                  covariance = TRUE)$covariance[,,1]
 #' 
 #' leastsquares(laplacian_inv, melip.Fst) #without 'phi': return MLE of phi
 #' leastsquares(laplacian_inv, melip.Fst, phi = c(0., 0.5, -0.1))

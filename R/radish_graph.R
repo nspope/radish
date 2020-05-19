@@ -1,22 +1,20 @@
 #' Create a parameterized conductance surface
 #'
-#' Given a set of spatial covariates (as a 'RasterStack') and a set of
-#' spatial coordinates (class 'SpatialPoints'), create an abstract parameterized
-#' conductance surface.
+#' Given a set of spatial covariates and a set of spatial coordinates, create a
+#' graph representing a parameterized conductance surface.
 #'
-#' @param formula A 'formula' object for the spatial data in 'covariates' (see 'Details')
-#' @param covariates A 'RasterStack' containing spatial covariates
-#' @param coords A 'SpatialPoints' object containing coordinates for a set of focal cells
-#' @param directions If '4', consider only horizontal/vertical neighbours as adjacent; if '8', also consider diagonal neighbours as adjacent
-#' @param saveStack If TRUE, the modified RasterStack is returned
+#' @param covariates A \code{RasterStack} containing spatial covariates
+#' @param coords A \code{SpatialPoints} object containing coordinates for a set of focal cells, with the same projection as the rasters in \code{covariates}
+#' @param directions If \code{4}, consider only horizontal/vertical neighbours as adjacent; if \code{8}, also consider diagonal neighbours as adjacent
+#' @param saveStack If \code{TRUE}, the \code{RasterStack} is returned with missing data masked uniformly across rasters
 #'
-#' @details NAs are shared across rasters in 'covariates', and a warning is thrown if a given cell has mixed NA and non-NA values across the stack. Comparing models with different patterns of missing spatial data (e.g. fit to different stacks of rasters) can give superficially inconsistant results, as these essentially involve different sets of vertices. The recommended way to create sets of nested models (with an invariant set of vertices) is via '?downdate'.
+#' @details NAs are shared across rasters in \code{covariates}, and a warning is thrown if a given cell has mixed NA and non-NA values across the stack. Comparing models with different patterns of missing spatial data (e.g. fit to different stacks of rasters) can give superficially inconsistant results, as these essentially involve different sets of vertices. Thus model comparison should use models fitted to the same \code{radish_graph} object.
 #'
 #' Disconnected components are identified and removed, so that only the largest connected component in the graph is retained. The function aborts if there are focal cells that belong to a disconnected component.
 #'
-#' The design matrix for the spatial data that is ultimately used in 'radish' (by an object of class 'conductance_model') is created from 'formula' and 'covariates' via 'model.matrix'.
+#' @seealso \code{\link{radish}}, \code{\link[raster]{stack}}
 #'
-#' @return An object of class 'radish_graph'
+#' @return An object of class \code{radish_graph}
 #'
 #' @references
 #'
@@ -27,8 +25,9 @@
 #' 
 #' data(melip)
 #' 
-#' covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
-#' surface <- radish_conductance_surface(~altitude * forestcover, covariates, melip.coords, directions = 8)
+#' covariates <- raster::stack(list(altitude=raster::scale(melip.altitude), 
+#'                                  forestcover=raster::scale(melip.forestcover)))
+#' surface <- conductance_surface(covariates, melip.coords, directions = 8)
 #'
 #' @export
 

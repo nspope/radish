@@ -4,3 +4,4 @@
 [ ] logLik and AIC methods
 [ ] For compatibility with Circuitscape, provide option for edge conductance to be inverse of sum of cell resistances
 [ ] Stan hooks
+[ ] have 'radish_graph' check that projection of covariates and coords is equivalent (or reproject?)

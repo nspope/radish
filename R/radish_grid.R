@@ -1,39 +1,25 @@
 #' Evaluate likelihood of a parameterized conductance surface
 #'
-#' Calculates profile likelihood of a parameterized conductance surface across
-#' a grid of parameter values.
+#' Calculates the profile likelihood of a parameterized conductance surface across
+#' a grid of parameter values (e.g. the nuisance parameters are optimized at each
+#' point on the grid).
 #'
 #' @param theta A matrix of dimension (grid size) x (number of parameters)
-#' @param formula A formula with the name of a matrix of observed genetic distances on the lhs, and covariates used in the creation of 'data' on the rhs
-#' @param data An object of class 'radish_graph'
-#' @param conductance_model A function of class 'radish_conductance_model_factory'
-#' @param measurement_model A function of class 'radish_measurement_model'
-#' @param nu Number of genetic markers (potentially used by 'g')
-#' @param nonnegative Force regression-like 'measurement_model' to have nonnegative slope?
-#' @param conductance If TRUE, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)
-#' @param covariance If TRUE, additionally return (a submatrix of) the generalized inverse of graph Laplacian across the grid
+#' @param formula A formula with the name of a matrix of observed genetic distances on the lhs, and covariates in the creation of \code{data} on the rhs
+#' @param data An object of class \code{radish_graph} (see \code{\link{conductance_surface}})
+#' @param conductance_model A function of class \code{radish_conductance_model_factory} (see \code{\link{radish_conductance_model_factory}})
+#' @param measurement_model A function of class \code{radish_measurement_model} (see \code{\link{radish_measurement_model}})
+#' @param nu Number of genetic markers (potentially used by \code{measurement_model})
+#' @param nonnegative Force regression-like \code{measurement_model} to have nonnegative slope?
+#' @param conductance If \code{TRUE}, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (unused; TODO)
+#' @param covariance If \code{TRUE}, additionally return (a submatrix of) the generalized inverse of graph Laplacian across the grid
 #'
-#' @return An object of class 'radish_grid'
+#' @return An object of class \code{radish_grid}, containing:
 #'
 #' @examples
-#' library(raster)
-#' 
-#' data(melip)
-#' 
-#' covariates <- raster::stack(list(altitude=raster::scale(melip.altitude), forestcover=raster::scale(melip.forestcover)))
-#' surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
-#' 
-#' theta <- as.matrix(expand.grid(x=seq(-1,1,length.out=21), y=seq(-1,1,length.out=21)))
-#' grid <- radish_grid(theta, melip.Fst ~ forestcover + altitude, surface,
-#'                     radish::loglinear_conductance, radish::mlpe)
-#' 
-#' library(ggplot2)
-#' ggplot(data.frame(loglik=grid$loglik, grid$theta)) + 
-#'   geom_tile(aes(x=x,y=y,fill=-loglik)) + theme_bw() +
-#'   geom_contour(aes(x=x,y=y,z=-loglik), color="black") +
-#'   xlab(expression(theta[altitude])) +
-#'   ylab(expression(theta[forestcover]))
-#' 
+#'
+#'  TODO
+#'
 #' @export
 
 radish_grid <- function(theta,
@@ -105,24 +91,17 @@ radish_grid <- function(theta,
 #' a grid of parameter values.
 #'
 #' @param theta A matrix of dimension (grid size) x (number of parameters)
-#' @param formula A formula with covariates used in the creation of 'data' on the rhs
-#' @param data An object of class 'radish_graph'
-#' @param conductance_model A function of class 'radish_conductance_model_factory'
-#' @param conductance If TRUE, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (NOT USED; TODO)
-#' @param covariance If TRUE, instead of resistance distances return the associated submatrix of the generalized inverse of graph Laplacian
+#' @param formula A formula with the name of a matrix of observed genetic distances on the lhs, and covariates in the creation of \code{data} on the rhs
+#' @param data An object of class \code{radish_graph} (see \code{\link{conductance_surface}})
+#' @param conductance_model A function of class \code{radish_conductance_model_factory} (see \code{\link{radish_conductance_model_factory}})
+#' @param conductance If \code{TRUE}, edge conductance is the sum of cell conductances; otherwise edge conductance is the inverse of the sum of cell resistances (unused; TODO)
+#' @param covariance If \code{TRUE}, instead of a matrix of resistance distances, return the associated submatrix of the generalized inverse of graph Laplacian
 #'
-#' @return An object of class 'radish_grid'
+#' @return An object of class \code{radish_grid}
 #'
 #' @examples
-#' library(raster)
-#' 
-#' data(melip)
-#' 
-#' covariates <- raster::stack(list(altitude=melip.altitude, forestcover=melip.forestcover))
-#' surface <- radish_conductance_surface(covariates, melip.coords, directions = 8)
-#' 
-#' theta <- as.matrix(expand.grid(x=seq(-6,6,length.out=21), y=seq(-6,6,length.out=21)))
-#' distances <- radish_distance(radish::loglinear_conductance, surface, theta)
+#'
+#'  TODO
 #' 
 #' @export
 
