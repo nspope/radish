@@ -17,5 +17,7 @@ The model is of the form
 
 where "C_i" is the conductance of vertex "i", "x_ij" is the value of spatial
 covariate "j" at vertex "i", and "theta_j" is the parameter associated with
-covariate "j".
+covariate "j". The intercept is omitted as it is non-identifiable.
+
+Categorical covariates are dummy-coded using the default contrasts, via \code{\link[stats]{model.matrix}}.
 }
