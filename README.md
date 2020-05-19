@@ -115,7 +115,11 @@ surface_cat <- conductance_surface(covariates_cat, melip.coords, directions = 8)
 
 fit_mlpe_cat <- radish(melip.Fst ~ forestcover + altitude, surface_cat, 
                        radish::loglinear_conductance, radish::mlpe)
-summary(fit_mlpe_cat)
+
+# contrast coding is the default for R, and for this conductance model
+# the (non-identifiable) intercept is omitted (e.g. only relative
+# differences in conductance among levels are identifiable from the data)
+summary(fit_mlpe_cat) 
 
 # example of lower level interface:
 # compute negative loglikelihood, gradient, Hessian for a given choice of
