@@ -35,6 +35,21 @@ a grid of parameter values.
 }
 \examples{
 
- TODO
+library(raster)
+
+data(melip)
+
+covariates <- raster::stack(list(altitude = raster::scale(melip.altitude), 
+                                 forestcover = raster::scale(melip.forestcover)))
+
+theta <- as.matrix(expand.grid(forestcover=seq(-1,1,length.out=21), 
+                               altitude=seq(-1,1,length.out=21)))
+
+distances <- radish_distance(theta, ~forestcover + altitude, 
+                             surface, radish::loglinear_conductance)
+
+ibd <- which(theta[,1] == 0 & theta[,2] == 0)
+plot(distances$distance[,,ibd], melip.Fst, pch = 19, 
+     xlab = "Null resistance distance (IBD)", ylab = "Fst")
 
 }

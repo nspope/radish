@@ -9,7 +9,7 @@ Description: Maximum likelihood estimation for parameterized conductance models 
 License: BSD3
 Suggests: numDeriv
 Imports: Rcpp (>= 1.0.4), raster, Matrix, nlme, corMLPE, MASS, sp, igraph
-Depends: Matrix
+Depends: R (>= 3.5.0), Matrix
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 7.1.0
 Encoding: UTF-8
