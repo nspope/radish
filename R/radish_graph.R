@@ -12,6 +12,8 @@
 #'
 #' Disconnected components are identified and removed, so that only the largest connected component in the graph is retained. The function aborts if there are focal cells that belong to a disconnected component.
 #'
+#' Rasters of categorical covariates must have an associated RAT to be 'recognized' as categorical, see \code{\link[raster]{ratify}} and \code{examples} below. The names of levels are taken from the \code{VALUE} column of the RAT, if it exists (otherwise, the integer codes in the \code{ID} column are used).
+#'
 #' @seealso \code{\link{radish}}, \code{\link[raster]{stack}}
 #'
 #' @return An object of class \code{radish_graph}
@@ -21,6 +23,7 @@
 #' Pope NS. In prep. Fast gradient-based optimization of resistance surfaces.
 #'
 #' @examples
+#'
 #' library(raster)
 #' 
 #' data(melip)
@@ -29,6 +32,19 @@
 #'                                  forestcover=raster::scale(melip.forestcover)))
 #'
 #' surface <- conductance_surface(covariates, melip.coords, directions = 8)
+#'
+#' # categorical covariates:
+#' # rasters of categorical covariates must have an associated RAT, see 'details'
+#' forestcover_class <- cut(raster::values(melip.forestcover), breaks = c(0, 1/3, 1/6, 1)) 
+#' melip.forestcover_cat <- 
+#'   raster::ratify(raster::setValues(melip.forestcover, as.numeric(forestcover_class)))
+#'
+#' RAT <- levels(melip.forestcover_cat)[[1]]
+#' RAT$VALUE <- levels(forestcover_class) #explicitly define level names
+#' levels(melip.forestcover_cat) <- RAT
+#' 
+#' covariates_cat <- raster::stack(list(forestcover = melip.forestcover_cat,
+#'                                      altitude = melip.altitude)) 
 #'
 #' @export
 

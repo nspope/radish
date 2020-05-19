@@ -96,6 +96,25 @@ fit_mlpe_ibd <- radish(melip.Fst ~ 1, surface,
                        radish::loglinear_conductance, radish::mlpe)
 anova(fit_mlpe, fit_mlpe_ibd)
 
+# categorical covariates:
+# rasters of categorical covariates must have an associated RAT, see ?raster::ratify
+# the names of levels are taken from the VALUE column of the RAT, if it exists (otherwise,
+# the integer codes are used)
+forestcover_class <- cut(raster::values(melip.forestcover), breaks = c(0, 1/3, 1/6, 1)) 
+melip.forestcover_cat <- raster::ratify(raster::setValues(melip.forestcover, as.numeric(forestcover_class)))
+RAT <- levels(melip.forestcover_cat)[[1]]
+RAT$VALUE <- levels(forestcover_class)
+levels(melip.forestcover_cat) <- RAT
+
+covariates_cat <- raster::stack(list(forestcover = melip.forestcover_cat,
+                                     altitude = melip.altitude)) 
+
+surface_cat <- conductance_surface(covariates_cat, melip.coords, directions = 8)
+
+fit_mlpe_cat <- radish(melip.Fst ~ forestcover + altitude, surface_cat, 
+                       radish::loglinear_conductance, radish::mlpe)
+summary(fit_mlpe_cat)
+
 # example of lower level interface:
 # compute negative loglikelihood, gradient, Hessian for a given choice of
 # of the conductance parameters theta, using a different measurement model
