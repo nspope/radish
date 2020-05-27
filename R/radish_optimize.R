@@ -3,11 +3,11 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' Optimize a parameterized conductance surface
 #'
 #' Uses maximum likelihood to fit a parameterized conductance surface to genetic data,
-#' given a function mapping spatial data to conductance (a "conductance model")
-#' and a function mapping resistance distance (covariance) to genetic distance
+#' given a function relating spatial data to conductance (a "conductance model")
+#' and a function relating resistance distance (covariance) to genetic distance
 #' (a "measurement model").
 #'
-#' @param formula A formula with the name of a matrix of observed genetic distances on the lhs, and covariates in the creation of \code{data} on the rhs
+#' @param formula A formula with a matrix of observed genetic distances on the lhs, and covariates used in the creation of \code{data} on the rhs
 #' @param data An object of class \code{radish_graph} (see \code{\link{conductance_surface}})
 #' @param conductance_model A function of class \code{radish_conductance_model_factory} (see \code{\link{radish_conductance_model_factory}})
 #' @param measurement_model A function of class \code{radish_measurement_model} (see \code{\link{radish_measurement_model}})
@@ -20,19 +20,57 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' @param control A list containing options for the optimization routine (see \code{\link{NewtonRaphsonControl}} for list)
 #' @param validate Numerical validation of leverage via package \code{numDeriv} (very slow, use for debugging small examples)
 #'
-#' @details By "parameterized conductance surface", what is meant is a model where per-vertex conductance (and thus resistance distance) is a function of spatial covariates. The choice of function is referred to in this package as the "conductance model". The inverse problem (and the purpose of this package) is to estimate the parameters of the conductance model, by relating the (unknown, modelled) resistance distance to observed genetic dissimilarity via a probability model (referred to as the "measurement model" throughout this package).
+#' @details By "parameterized conductance surface", what is meant is a model
+#' where the per-vertex conductance (and thus resistance distance) is a function of
+#' spatial covariates. The choice of function is referred to in this package as
+#' the "conductance model". The inverse problem (and the purpose of this
+#' package) is to estimate the parameters of the conductance model, by relating
+#' the (unknown, modeled) resistance distance to observed genetic dissimilarity
+#' via a probability model (referred to as the "measurement model" throughout
+#' this package).
 #'
 #' For example, a log-linear choice of conductance model is:
 #'
-#'   \code{conductance[i] = exp(covariates[i,] \%*\% theta)}
+#'   \code{vertex_conductance[i] = exp(covariates[i,] \%*\% theta)}
 #'
-#' where \code{theta} are unknown parameters and \code{covariates} is a design matrix. \code{radish} estimates \code{theta} as well as any nuisance parameters associated with the measurement model.
+#' where \code{theta} are unknown parameters, \code{covariates} is a design
+#' matrix with each row representing a vertex in the graph (cell in the
+#' raster). The conductance of a given edge -- an offdiagonal entry in the
+#' graph Laplacian -- is:
 #'
-#' If the fit is on the boundary (e.g. no spatial genetic structure) or is the null model of isolation-by-distance, the resulting object will not contain influence/leverage/gradient/hessian.
+#'   \code{edge_conductance[i,j] = vertex_conductance[i] + vertex_conductance[j]}
 #'
-#' For handling of categorical covariates, see \code{details} of \code{\link{conductance_surface}} and examples below. The dummy coding of categorical covariates is created by \code{conductance_model} (e.g. \code{radish::loglinear_conductance}) for flexiblity. Currently, all the in-built conductance models in \code{radish} use the default contrast coding (e.g. for a categorical covariate with K factors, the K-1 mean differences against a reference category). For these conductance models, the intercept is excluded if it is not identifiable.
+#' if argument \code{conductance = TRUE}, and
 #'
-#' @return An object of class \code{radish}
+#'   \code{edge_conductance[i,j] = 1/(1/vertex_conductance[i] + 1/vertex_conductance[j])}
+#'
+#' otherwise [TODO NOT IMPLEMENTED; argument \code{conductance} is always TRUE
+#' currently].  This differs by a factor of two from CIRCUITSCAPE, where the edge 
+#  conductance/resistance is the average of the vertex conductance/resistance.
+#'
+#' \code{radish} estimates \code{theta} (and thus the conductance) by maximum likelihood; by finding the
+#' values of \code{theta} (and associated conductance) that result in
+#' resistance distances that are closest to the observed genetic distances,
+#' according to some measure of fit (like least squares). The optimization is
+#' done via Newton's method (default; requires computation of Hessian) or via the BFGS
+#' algorithm (requires gradient only) if argument \code{optimizer = "bfgs"}. 
+#'
+#' For an explanation of how categorical spatial covariates are handled, see
+#' \code{details} of \code{\link{conductance_surface}} and the examples below.
+#' The dummy coding of categorical covariates is done by the function passed to
+#' \code{conductance_model} (e.g.  \code{radish::loglinear_conductance}).
+#' Currently, all of the built-in conductance models in \code{radish} use the
+#' default contrast coding (e.g. for a categorical covariate with \code{K}
+#' factors, the estimated parameters are the \code{K-1} mean differences
+#' against a reference category). The intercept is excluded if it is not
+#' identifiable.
+#'
+#' If the fit is on the boundary (e.g. no spatial genetic structure) or is the
+#' null model of isolation-by-distance, the fitted object will not contain
+#' influence/leverage/gradient/hessian.
+#'
+#' @return An object of class \code{radish}, with S3 methods:
+#'   TODO:
 #'
 #' @examples
 #'
@@ -381,8 +419,7 @@ simulate.radish <- function(x, nsim = 1, method = c("permutation", "parametric")
   } 
   else if (method == "permutation") 
   {
-    fit    <- fitted(x)
-    resid  <- x$fit$response - fit
+    resid  <- resid(x)
     sims   <- array(NA, c(nrow(resid), ncol(resid), nsim))
     for (i in 1:nsim)
     {
@@ -429,4 +466,23 @@ anova.radish <- function(object, alternative)
                            form_reduced, form_full)
   class(out) <- "anova"
   out
+}
+
+logLik.radish <- function(obj, ...)
+{
+  val <- obj$loglik
+  attr(val, "df") <- obj$df
+  class(val) <- "logLik"
+  val
+}
+
+AIC.radish <- function(obj, ...)
+{
+  obj$aic
+}
+
+resid.radish <- function(obj, ...)
+{
+  fit   <- fitted(x)
+  x$fit$response - fit
 }
