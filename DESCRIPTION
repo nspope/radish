@@ -3,7 +3,7 @@ Type: Package
 Title: Fast gradient-based optimization of resistance surfaces
 Version: 0.0.2
 Date: 2020-05-05
-Author: Nathaniel S. Pope
+Author: Nathaniel S. Pope, Bill Peterman
 Maintainer: Nathaniel S. Pope <nspope@utexas.edu>
 Description: Maximum likelihood estimation for parameterized conductance models via Newton and quasi-Newton methods, for moderate-sized problems (e.g. rasters with less than a million cells)
 License: BSD3

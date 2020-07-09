@@ -329,7 +329,7 @@ class(mlpe) <- "radish_measurement_model"
 
 # pre-compute needed eigendecomposition for 3-100 demes
 # eventually I could store this for larger range in /include?
-.mlpe_eigen <- lapply(1:100, function(n) {
+.mlpe_eigen <- lapply(1:300, function(n) {
                         if (n == 1) NA
                         else {
                           Ind    <- which(lower.tri(diag(n)), arr.ind = TRUE)
